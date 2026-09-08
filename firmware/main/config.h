@@ -1,3 +1,4 @@
+#pragma once
 #define DESTINO_IP  "IP_DESTINY"
 #define AP_SSID     "YOUR_AP_SSID"
 #define AP_PASSWORD "YOUR_AP_PASSWORD"
