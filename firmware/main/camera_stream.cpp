@@ -114,9 +114,8 @@ void task_camara(void *parameter) {
     udpVideo.begin(VIDEO_PORT);
 
     while (true) {
-        // GOLDEN RULE: Only stream video if the control TCP connection is active.
-        // This prevents UDP from flooding the network and blocking the TCP handshake.
-        if (!client.connected()) {
+        // Only stream video while the ESP32 has an active Wi-Fi connection.
+        if (WiFi.status() != WL_CONNECTED) {
             vTaskDelay(100 / portTICK_PERIOD_MS);
             continue;
         }

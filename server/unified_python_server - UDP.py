@@ -10,7 +10,7 @@ import threading
 # NETWORK CONFIGURATION
 # ==========================================
 HOST = '0.0.0.0'      # listen on ANY of this PC's network interfaces (not just one)
-PORT_CONTROL = 1883   # TCP port for control: MOV/DIR commands and heartbeat
+PORT_CONTROL = 1883   # UDP port for control: MOV/DIR commands and heartbeat
 PORT_VIDEO = 1884     # UDP port for the camera's JPEG frames
 # (IP picks the machine; the port picks which service on it — like building + apartment)
 
@@ -348,24 +348,16 @@ def main():
     pygame.joystick.init()
     joystick = None  # Placeholder for the gamepad/controller instance
 
-    # Create a TCP/IP socket for control communication
-    server_control = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Create a UDP socket for control communication
+    server_control = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
-    # Allow immediate reuse of the port to prevent "Address already in use" errors on restart
-    server_control.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
-    # Bind the socket to the defined host and control port
-    server_control.bind((HOST, PORT_CONTROL))
-    
-    # Listen for incoming connection requests (maximum queue of 1)
-    server_control.listen(1)
-    
-    # Set a 2.0-second timeout on the server socket:
-    # 1. Without a timeout, server_control.accept() blocks execution indefinitely 
-    #    while waiting for a client connection, freezing the program.
-    # 2. With settimeout(2.0), if no client connects within 2 seconds, the method 
-    #    raises a timeout exception instead of locking the thread permanently, 
-    #    allowing the main loop to handle other events.
+    server_control.bind((HOST, PORT_CONTROL))  # Bind the socket to all interfaces on the control port
+
+
+
+
+    # Set a 2.0-second timeout so recvfrom() periodically returns control to the
+    # main loop while waiting for the ESP32's discovery packet.
     server_control.settimeout(2.0)
     
     print(f"[{timestamp()}] Control Server active on port {PORT_CONTROL}")
@@ -388,9 +380,11 @@ def main():
 
             # Wait for an incoming client connection with a 2-second timeout
             try:
-                print(f"[{timestamp()}] Waiting for ESP32 on control port...")
-                conn, addr = server_control.accept()
-                print(f"[{timestamp()}] ESP32 Control connected: {addr}")
+                
+                print(f"[{timestamp()}] Waiting for the first UDP packet from ESP32 on port {PORT_CONTROL}...")
+                
+                data, esp_addr = server_control.recvfrom(1024)
+                print(f"[{timestamp()}] ESP32 detected at address: {esp_addr}")
             except socket.timeout:
                 continue
 
@@ -459,30 +453,32 @@ def main():
                             move = 0.0
                             direction = 0.0
 
-                    # Format the final telemetry command string to send to the robot over TCP
+                    # Format the final telemetry command string to send to the robot over UDP
                     command = f"MOV:{move:.2f},DIR:{direction:.2f}\n"
 
                     try:
-                        # Send command only if it changes or if a heartbeat interval has passed
+                        
                         if command != previous_command:
                             print(f"[{'AUTO' if autonomous_mode else 'MANUAL'}] Sending: {command.strip()}")
-                            conn.send(command.encode())
+                            server_control.sendto(command.encode(), esp_addr)
                             previous_command = command
                             last_sent_time = time.time()
 
                         elif time.time() - last_sent_time > 0.2:
-                            # Send a heartbeat packet if no movement command changed for over 200ms
-                            conn.send(b'HB\n')
+                            # Heartbeat enviado via UDP
+                            server_control.sendto(b'HB\n', esp_addr)
                             last_sent_time = time.time()
 
                     except OSError as e:
-                        print(f"[{timestamp()}] Control connection lost: {e}")
+                        print(f"[{timestamp()}] Error in UDP transmission: {e}")
                         break
 
                     time.sleep(0.05)
 
-            finally:
-                conn.close()
+            except Exception as e:
+                # Leave the active connection loop and wait for the next UDP packet.
+                print(f"[{timestamp()}] Error in control loop: {e}")
+                continue
 
     except KeyboardInterrupt:
         print("\nServer shutting down...")

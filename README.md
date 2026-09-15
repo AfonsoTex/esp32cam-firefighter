@@ -19,7 +19,7 @@ The ESP32 stays "dumb" on purpose: it captures and sends frames, receives comman
 
 **On the ESP32 (two cores, so heavy video never blocks driving):**
 - **Core 0** captures JPEG frames from the OV2640 and streams them to the PC over **UDP** (port 1884).
-- **Core 1** receives `MOV:x,DIR:y` commands over TCP (port 1883) and drives the motors.
+- **Core 1** receives `MOV:x,DIR:y` commands over **UDP** (port 1883) and drives the motors.
 
 **On the PC (`server/unified_python_server.py`), three threads:**
 - **Receive** — reads UDP video packets and reassembles each JPEG frame, keeping only the most recent one.
@@ -28,7 +28,7 @@ The ESP32 stays "dumb" on purpose: it captures and sends frames, receives comman
 
 **Why UDP for video:** with live video you want the *freshest* frame, not a backed-up queue of old ones. TCP resends lost packets and everything waits; UDP drops a lost frame and moves on. A JPEG frame is reassembled from packets using its start/end markers (`FF D8` / `FF D9`).
 
-A heartbeat keeps the link alive: if commands go silent for 1 s the motors stop, for 5 s the connection is dropped and reopened. If WiFi is lost for 10 s the chip restarts.
+A heartbeat keeps the link alive: if UDP commands go silent for 1 s the motors stop, and after 5 s the ESP32 sends `HELLO` packets to rediscover the PC. If WiFi is lost for 10 s the chip restarts.
 
 ## Line following
 
@@ -95,7 +95,7 @@ A small **state machine** handles losing the line: normal follow, and a recovery
 
 **Network**
 - **Same network (local):** set `DESTINO_IP` in `config.h` to the PC's private IP (`192.168.x.x`). Lowest latency.
-- **Over the internet:** forward ports **1883** (TCP) and **1884** (UDP) on the router to the PC, and set `DESTINO_IP` to the router's public IP.
+- **Over the internet:** forward ports **1883** (UDP) and **1884** (UDP) on the router to the PC, and set `DESTINO_IP` to the router's public IP.
   - Note: if the car and PC are on the *same* network but you use the public IP, many routers won't route it back inside (no NAT loopback). Use the private IP in that case.
 
 ## Tuning (important — read this)

@@ -1,10 +1,4 @@
 // ── ESP32-CAM RC Car ─────────────────────────────────────────────────
-// Ponto de entrada do sketch. A lógica está dividida em módulos:
-//   config.h         -> credenciais/definições que mudam com a tua rede
-//   network_state.*  -> estado partilhado da ligação (buffer, sockets, timers)
-//   motor_control.*  -> ponte H (L293D): direção e PWM dos motores
-//   wifi_manager.*   -> guardar redes em NVS, modo Access Point, ligação
-//   camera_stream.*  -> inicialização do OV2640 e streaming de vídeo por UDP
 #include "config.h"
 #include "network_state.h"
 #include "motor_control.h"
@@ -20,18 +14,28 @@ void setup() {
 
     setup_camera();         // configure and initialize the OV2640 sensor
 
-    // Connects to a saved WiFi network, or falls back to AP config mode
-    // (in which case this call never returns). On success it also starts
-    // the camera streaming task pinned to Core 0.
+    // Connects to the Wi-Fi network and starts the video task.
+    // This is a blocking function, it only proceeds when Wi-Fi is connected.
     wifi_setup_and_connect();
+
+    // ==========================================
+    // UDP CONTROL INITIALIZATION
+    // ==========================================
+    udpControl.begin(SERVER_PORT); // Listens for packets on port 1883
+    Serial.printf("UDP Control listening on port %d\n", SERVER_PORT);
+
+    // Sends the initial packet to the PC. 
+    // This is what the Python script ("recvfrom") is waiting for to discover the ESP32's IP!
+    udpControl.beginPacket(destino, SERVER_PORT);
+    udpControl.print("HELLO");
+    udpControl.endPacket();
+    
+    lastHeartbeat = millis(); 
 }
 
 void loop() {
     // Layer 1 — is WiFi connected?
-    // If not: stop the motors and start timing the outage (trackingLostWifi
-    // makes sure the instant is recorded only once). After 10 s down,
-    // ESP.restart(). The return blocks everything else — no WiFi, nothing to
-    // do. If connected, clear the flag so the next outage is timed fresh.
+    // If not: stop the motors and start timing the outage.
     if (WiFi.status() != WL_CONNECTED) {
         stop_motors();
         if (!trackingLostWifi) {
@@ -39,51 +43,46 @@ void loop() {
             trackingLostWifi = true;
         }
         if (millis() - wifiLostTimestamp > 10000) ESP.restart();
-        return;
+        return; // Do nothing else if there is no Wi-Fi
     }
     trackingLostWifi = false;
 
-    // Layer 2 — is the TCP link to the PC up?
-    // If down: stop the motors and retry connect once every 5 s (connect
-    // blocks while waiting, so calling it every loop would trap us here).
-    // Reset lastHeartbeat either way so the fresh link isn't seen as silent.
-    if (!client.connected()) {
-        stop_motors();
-        if (millis() - lastReconnectAttempt > 5000) {
-            lastReconnectAttempt = millis();
-            Serial.printf("[%lu] Trying to reach the PC...\n", millis());
-            if (client.connect(destino, SERVER_PORT)) {
-                Serial.printf("[%lu] Connected successfully!\n", millis());
-                lastHeartbeat = millis();
-            } else {
-                lastHeartbeat = millis();
-                Serial.printf("[%lu] CONNECTION FAILED!\n", millis());
-            }
+
+    // Layer 2 — Read incoming UDP packets
+    // Process packets immediately to update lastHeartbeat before testing for timeout.
+    int packetSize = udpControl.parsePacket();
+    if (packetSize > 0) {
+        // Reads the packet directly into the buffer
+        int len = udpControl.read(buffer, sizeof(buffer) - 1);
+        if (len > 0) {
+            buffer[len] = '\0'; // Adds a null terminator to make it a valid string
         }
-        return;
-    }
+        
+        lastHeartbeat = millis(); // Receiving ANY packet means the PC is alive
 
-    // Layer 3 — silence watchdog. PC sends HB every 0.2 s, so silence = trouble.
-    if (millis() - lastHeartbeat > 1000) {
-        stop_motors();                    // 1 s: safety stop
-    }
-
-    if (millis() - lastHeartbeat > 5000) {
-        Serial.printf("[%lu] HEARTBEAT TIMEOUT - closing!\n", millis());
-        client.stop();                    // 5 s: assume dead, drop the socket
-        lastReconnectAttempt = millis();
-    }
-
-    // Layer 4 — read all pending lines; only MOV: lines drive the motors.
-    if (client.available() > 0) {
-        while (client.available() > 0) {
-            memset(buffer, 0, sizeof(buffer));
-            client.readBytesUntil('\n', buffer, sizeof(buffer) - 1);
-            lastHeartbeat = millis();
-        }
-
+        // If it's a MOV command, process it for the motors
         if (strncmp(buffer, "MOV:", 4) == 0) {
             processar_comando(buffer);
+        }
+    }
+
+
+    // Layer 3 — Watchdog (Safety Stop & PC Wake-up)
+    // If 1000ms (1s) pass without packets (neither MOV nor HB), stop the car for safety.
+    if (millis() - lastHeartbeat > 1000) {
+        stop_motors();
+    }
+
+    // If 5000ms (5s) of silence pass, the Python script on the PC might have restarted 
+    // and lost our IP. We resend "HELLO" every 2 seconds to wake it up.
+    if (millis() - lastHeartbeat > 5000) {
+        if (millis() - lastReconnectAttempt > 2000) {
+            lastReconnectAttempt = millis();
+            Serial.printf("[%lu] Prolonged silence. Sending HELLO to PC...\n", millis());
+            
+            udpControl.beginPacket(destino, SERVER_PORT);
+            udpControl.print("HELLO");
+            udpControl.endPacket();
         }
     }
 }
