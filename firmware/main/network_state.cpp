@@ -1,8 +1,7 @@
 #include "network_state.h"
 #include "config.h"
 
-// Fixed size buffer: String/mal
-loc would fragment the heap over thousands of
+// Fixed size buffer: String/malloc would fragment the heap over thousands of
 // iterations, and the camera needs large contiguous blocks per JPEG frame.
 char buffer[128];
 

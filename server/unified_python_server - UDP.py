@@ -87,7 +87,7 @@ def video_rx_thread():
     global latest_frame  #otherwise creates local variables; we need global for thread communication
 
     server_video = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Added: Creates a UDP socket to receive the camera's video stream
-    server_video.bind(('0.0.0.0', 1884))                             # Added: Binds the socket to all local interfaces on port 1884
+    server_video.bind((HOST, PORT_VIDEO))  # Binds the socket to all local interfaces on the video port
     
     print("Waiting for video on UDP port 1884 (Accumulation Mode)...")
     
@@ -350,6 +350,7 @@ def main():
 
     # Create a UDP socket for control communication
     server_control = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_control.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
     server_control.bind((HOST, PORT_CONTROL))  # Bind the socket to all interfaces on the control port
 

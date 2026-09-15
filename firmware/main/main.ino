@@ -26,7 +26,7 @@ void setup() {
 
     // Sends the initial packet to the PC. 
     // This is what the Python script ("recvfrom") is waiting for to discover the ESP32's IP!
-    udpControl.beginPacket(destino, SERVER_PORT);
+    udpControl.beginPacket(CONTROL_DISCOVERY_IP, SERVER_PORT);
     udpControl.print("HELLO");
     udpControl.endPacket();
     
@@ -80,7 +80,7 @@ void loop() {
             lastReconnectAttempt = millis();
             Serial.printf("[%lu] Prolonged silence. Sending HELLO to PC...\n", millis());
             
-            udpControl.beginPacket(destino, SERVER_PORT);
+            udpControl.beginPacket(CONTROL_DISCOVERY_IP, SERVER_PORT);
             udpControl.print("HELLO");
             udpControl.endPacket();
         }
