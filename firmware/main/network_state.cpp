@@ -11,15 +11,12 @@ char buffer[128];
 // Set this in config.h — it changes with your network.
 const char *destino = DESTINO_IP;
 
-// Normal mode: the ESP32 is the client on both connections.
-WiFiClient client;         // commands from comandos.py, port 1883
-//WiFiClient clienteVideo;   // JPEG frames to camara.py, port 1884
-
-// Declares the UDP object responsible for managing the video streaming channel
+// UDP sockets for control commands and video streaming.
+WiFiUDP udpControl;
 WiFiUDP udpVideo;
 
 // Last time any data arrived from the PC. Silence for >1 s stops the
-// motors; >5 s drops the TCP connection.
+// motors; >5 s triggers another UDP discovery packet.
 unsigned long lastHeartbeat = 0;
 unsigned long wifiLostTimestamp = 0;
 bool trackingLostWifi = false;

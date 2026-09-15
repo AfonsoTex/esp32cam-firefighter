@@ -21,15 +21,12 @@ extern char buffer[128];
 // Set this in config.h — it changes with your network.
 extern const char *destino;
 
-// Normal mode: the ESP32 is the client on both connections.
-extern WiFiClient client;   // commands from comandos.py, port 1883
-//WiFiClient clienteVideo;   // JPEG frames to camara.py, port 1884
-
-// Declares the UDP object responsible for managing the video streaming channel
+// UDP sockets for control commands and video streaming.
+extern WiFiUDP udpControl;
 extern WiFiUDP udpVideo;
 
 // Last time any data arrived from the PC. Silence for >1 s stops the
-// motors; >5 s drops the TCP connection.
+// motors; >5 s triggers another UDP discovery packet.
 extern unsigned long lastHeartbeat;
 extern unsigned long wifiLostTimestamp;
 extern bool trackingLostWifi;
