@@ -24,8 +24,8 @@ void setup() {
     udpControl.begin(SERVER_PORT); // Listens for packets on port 1883
     Serial.printf("UDP Control listening on port %d\n", SERVER_PORT);
 
-    // Sends the initial packet to the PC. 
-    // This is what the Python script ("recvfrom") is waiting for to discover the ESP32's IP!
+    // Broadcast HELLO so the Python server can learn the ESP32's IP and port
+    // from the received packet and send control commands back.
     udpControl.beginPacket(CONTROL_DISCOVERY_IP, SERVER_PORT);
     udpControl.print("HELLO");
     udpControl.endPacket();

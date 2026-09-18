@@ -104,7 +104,7 @@ def video_rx_thread():
                 continue
             
             # Checks if it is the start of a JPEG frame (Universal FF D8 markers for JPEG images)
-            if data[0] == 0xFF and data[1] == 0xD8:
+            if data.startswith(b'\xff\xd8'):
                 frame_buffer = bytearray(data)  # When the start marker is detected, it means a new frame has begun transmitting. 
                                                 #The code discards any previous junk data and reinitializes the frame_buffer with 
                                                 #the data from this new packet.

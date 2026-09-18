@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/user/Desktop/ISEPINHOS/esp32cam-rc-car/firmware/main",
-      "program": "c:/Users/user/Desktop/ISEPINHOS/esp32cam-rc-car/firmware/main/build/Debug/outDebug",
+      "cwd": "${workspaceFolder}/firmware/esp32-cam/main",
+      "program": "${workspaceFolder}/firmware/esp32-cam/main/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

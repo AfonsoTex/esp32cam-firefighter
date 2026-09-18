@@ -1,5 +1,0 @@
-#pragma once
-#define DESTINO_IP  "IP_DESTINY"
-#define CONTROL_DISCOVERY_IP "255.255.255.255"
-#define AP_SSID     "YOUR_AP_SSID"
-#define AP_PASSWORD "YOUR_AP_PASSWORD"

@@ -114,7 +114,8 @@ void task_camara(void *parameter) {
     udpVideo.begin(VIDEO_PORT);
 
     while (true) {
-        // Only stream video while the ESP32 has an active Wi-Fi connection.
+        // If Wi-Fi is disconnected, wait 100 ms and restart the loop,
+        // skipping image capture and transmission.
         if (WiFi.status() != WL_CONNECTED) {
             vTaskDelay(100 / portTICK_PERIOD_MS);
             continue;

@@ -85,7 +85,7 @@ A small **state machine** handles losing the line: normal follow, and a recovery
 
 **Firmware**
 1. Install the ESP32 board package in Arduino IDE (Boards Manager → "esp32" by Espressif). Board: **AI Thinker ESP32-CAM**.
-2. Open `firmware/main/main.ino`. Edit `config.h` and set your PC IP and AP credentials.
+2. Open `firmware/esp32-cam/main/main.ino`. Edit `config.h` and set your PC IP and AP credentials.
 3. Upload to the ESP32.
 
 **PC server**
@@ -118,7 +118,8 @@ The line follower is **not plug-and-play**. The parameters at the top of `unifie
 ## Repository layout
 
 ```
-firmware/main/   ESP32 firmware (main.ino) + config.h
+firmware/esp32-cam/main/  ESP32 firmware (main.ino) + config.h
+firmware/raspberry/       Raspberry Pi servo control (C++ / lgpio)
 server/          unified_python_server.py (video + control + line following)
 hardware/        3D chassis (STL to print, F3D source)
 docs/            photos, thumbnails
