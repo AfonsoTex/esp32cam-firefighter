@@ -1,3 +1,4 @@
+#include "bomba.h"
 #include "servos.h"
 
 #include <csignal>
@@ -34,13 +35,20 @@ int main()
 #endif
 
     if (!inicializarServos()) {
-        std::cerr << "Erro ao abrir gpiochip0 ou reservar os GPIO.\n";
+        std::cerr << "Erro ao configurar os canais PWM dos servos.\n";
+        return 1;
+    }
+
+    if (!inicializarBomba()) {
+        std::cerr << "Erro ao reservar o GPIO da bomba.\n";
+        terminarServos();
         return 1;
     }
 
     // Initialization prepares the pins but does not request a position.
     std::cout << "Pan: GPIO" << GPIO_PAN << " | Tilt: GPIO" << GPIO_TILT << '\n'
-              << "Comandos: pan <us>, tilt <us>, sair\n"
+              << "Bomba: GPIO" << GPIO_BOMBA << '\n'
+              << "Comandos: pan <us>, tilt <us>, bomba on, bomba off, sair\n"
               << "Intervalo: " << PULSO_MIN_US << " a " << PULSO_MAX_US
               << " us. Comeca por " << PULSO_CENTRO_US << " us.\n"
               << "Para parar os impulsos e terminar: sair ou Ctrl+C.\n";
@@ -62,6 +70,33 @@ int main()
 
         if (comando == "sair" and !(entrada >> extra)) {
             break;
+        }
+
+        if (comando == "bomba") {
+            std::string estado;
+            if (!(entrada >> estado) or (entrada >> extra)) {
+                std::cerr << "Comando invalido. Exemplo: bomba on\n";
+                continue;
+            }
+
+            bool ligada;
+            if (estado == "on") {
+                ligada = true;
+            } else if (estado == "off") {
+                ligada = false;
+            } else {
+                std::cerr << "Estado invalido: usa on ou off.\n";
+                continue;
+            }
+
+            if (!definirBomba(ligada)) {
+                std::cerr << "Falha ao comandar a bomba. A terminar o teste.\n";
+                codigoSaida = 1;
+                break;
+            }
+
+            std::cout << "bomba: " << estado << '\n';
+            continue;
         }
 
         int pulso_us;
@@ -95,7 +130,8 @@ int main()
         std::cout << comando << ": " << pulso_us << " us\n";
     }
 
-    // Stops pulses on exit, end of input, or a handled termination signal.
+    // Stops pulses and the pump on exit, end of input, or a termination signal.
+    terminarBomba();
     terminarServos();
     std::cout << "\nControlo dos servos terminado.\n";
     return codigoSaida;
