@@ -70,7 +70,7 @@ def draw_detections(frame, boxes):
 
 
 def open_camera(index):
-    # ANTES: nenhuma ligacao a camara.
+    # ANTES: nenhuma ligacao a camara.1
     # OPERACAO: tenta abrir com dois "backends" diferentes do Windows
     # (MSMF, depois DSHOW) porque uma webcam pode responder a isOpened()
     # com True num deles e mesmo assim nunca entregar um frame valido -
