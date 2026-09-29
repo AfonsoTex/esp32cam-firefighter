@@ -1,5 +1,6 @@
 # Trains FireNet and evaluates it on validation data.
 # Saves the model whenever its validation score improves.
+# Automatically updates the cache after new annotated sessions enter the dataset.
 
 import os
 import time
@@ -151,6 +152,9 @@ def report(name, results):
 
 
 if __name__ == "__main__":
+
+    from criar_cache import ensure_cache
+    ensure_cache()
 
     train_loader = build_loader("train", True)
     valid_loader = build_loader("valid", False)

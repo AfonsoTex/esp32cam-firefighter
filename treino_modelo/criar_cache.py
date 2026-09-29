@@ -3,6 +3,9 @@
 # Run again whenever the dataset or image size changes.
 
 import os
+import hashlib
+import json
+from pathlib import Path
 import pickle
 import time
 
@@ -92,14 +95,32 @@ def build_cache(split):
     print(f"  {total} images, {size_gb:.2f} GB -> {images_path}")
 
 
-if __name__ == "__main__":
-
+def ensure_cache(force=False):
+    # Rebuild only the splits whose source images, labels, or image size changed.
     os.makedirs(CACHE_DIR, exist_ok=True)
-
-    print(f"Caching at {IMAGE_SIZE}x{IMAGE_SIZE} into '{CACHE_DIR}'")
-
-    for split in ["train", "valid"]:
-        print(split)
+    for split in ("train", "valid"):
+        samples = build_split(split)
+        if not samples:
+            raise ValueError(f"O dataset {split} esta vazio. Finaliza uma sessao no anotador primeiro.")
+        digest = hashlib.sha256(str(IMAGE_SIZE).encode())
+        for image_path, boxes in samples:
+            image = Path(image_path)
+            info = image.stat()
+            digest.update(json.dumps([str(image.resolve()), info.st_size, info.st_mtime_ns, boxes]).encode())
+        signature = digest.hexdigest()
+        marker = Path(CACHE_DIR) / (split + "_signature.txt")
+        images_path, boxes_path = cache_paths(split)
+        if (not force and marker.exists() and marker.read_text() == signature
+                and Path(images_path).is_file() and Path(boxes_path).is_file()):
+            continue
+        print(f"Updating {split} cache...")
+        # An interrupted build must never look up to date on the next attempt.
+        if marker.exists():
+            marker.unlink()
         build_cache(split)
+        marker.write_text(signature)
 
+
+if __name__ == "__main__":
+    ensure_cache(force=True)
     print("Done.")
