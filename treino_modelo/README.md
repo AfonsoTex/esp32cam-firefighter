@@ -1,113 +1,111 @@
-# FireNet — Flame Detection
+# FireNet — training tools
 
-A small PyTorch neural network that detects and locates flames in images and live webcam video.
+This folder contains the tools to prepare images, annotate flames, train FireNet, and export the model for the Raspberry Pi.
 
-## Files
+## Tools
 
 | File | Purpose |
 | --- | --- |
-| `extrair_frames.py` | Extract images from a video (one every 10 frames by default). |
-| `anotar_imagens.py` | Draw flame boxes and save YOLO-format labels (class `0`). |
-| `criar_cache.py` | Resize images to 128 × 128 and cache images and labels for faster training. |
-| `dados.py` | Load data, encode labels, and create training batches. |
-| `modelo.py` | Define the FireNet neural network. |
-| `treinar.py` | Train for 30 epochs and save the best validation model; reuse saved weights if available. |
-| `ver_resultados.py` | Save validation images with predictions in green and annotations in red. |
-| `detetar_camera.py` | Detect flames using a webcam, with optional video recording. |
-| `firenet_grid.pt` | Saved model weights and validation score. |
-| `resultados/cache/*_images.npy` | Prepared training and validation images. |
-| `resultados/cache/*_boxes.pkl` | Matching flame annotations. |
-| `../.venv/` | Local Python environment; do not commit it to GitHub. |
-| `Claude outputs/PWM_Raspberry_Pi_5.docx` | Supporting document; not required by the Python scripts. |
+| `anotar_imagens.py` | Opens a video, extracts images, lets you annotate them, and sends images and labels to the dataset when you finalize the session. Also lets you resume a session. |
+| `treinar.py` | Updates the cache automatically, trains for 30 epochs, and saves the best model to `firenet_grid.pt`. Reuses existing weights when available. |
+| `ver_resultados.py` | Reports validation performance and saves images with predictions in green and annotations in red to `resultados/previsoes_valid/`. |
+| `detetar_camera.py` | Shows live webcam predictions using the PyTorch model. Can record video with `--gravar`. |
+| `model_converter.py` | Converts `firenet_grid.pt` to `firenet.onnx` for inference on the Raspberry Pi. |
+| `extrair_frames.py` | Extracts images from a video separately. Optional: the annotator already calls this tool. |
+| `criar_cache.py` | Prepares 128×128 images and labels to speed up training. Optional: training updates the cache automatically. |
+| `modelo.py` | Defines the FireNet architecture; used by the other scripts. |
+| `dados.py` | Reads the dataset and prepares training batches; used by the other scripts. |
+| `requirements-converter.txt` | Lists the pinned conversion dependencies. |
 
-## Setup
+## Initial setup on Windows
 
-Use Python 3.12. Run these commands in PowerShell from `treino_modelo/`:
+Use Python 3.12. Run these commands **from the root of the `esp32cam-firefighter` repository**:
 
 ```powershell
-python -m venv ../.venv
-..\.venv\Scripts\python.exe -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-..\.venv\Scripts\python.exe -m pip install -r requirements-converter.txt
-..\.venv\Scripts\python.exe -m pip install opencv-python==4.10.0.84 pillow
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r treino_modelo/requirements-converter.txt
+.\.venv\Scripts\python.exe -m pip install opencv-python==4.10.0.84 pillow
 ```
 
-The commands below use the environment's Python directly, so activation is not required. Make sure all eight Python scripts listed above are present in this folder.
+All commands below also run from the repository root. They use the environment's Python directly, so activation is not required.
 
-## Use the webcam
+## Normal workflow: annotate → train → export
 
-Place the trained `firenet_grid.pt` file in this folder, then run:
+**1. Copy the video from the Raspberry Pi to your PC and open the annotator:**
 
 ```powershell
-..\.venv\Scripts\python.exe detetar_camera.py
+.\.venv\Scripts\python.exe treino_modelo/anotar_imagens.py
 ```
 
-Press **Q** or **Esc** to close. No training dataset or cache is needed for webcam detection when saved weights are available.
+The interface currently uses Portuguese button labels, shown below with their English meanings.
 
-Optional settings:
+- Choose **Abrir video novo** (Open new video) and select the video.
+- Choose the interval: 60 saves one image every 60 frames, not every 60 seconds.
+- Draw a box around each flame and press **Enter**. If there is no flame, choose **Sem chama** (No flame).
+- To continue later, choose **Continuar imagens ja extraidas** (Resume extracted images) and open the session folder. The program starts at the first image without a label and skips annotated images after saving.
+- Once every image is annotated, click **Finalizar** (Finalize). The default split is 80% training and 20% validation; you can adjust the percentage.
+
+**After confirmation**, the program copies the images and labels to the dataset, verifies the copies, and deletes the session originals and source video. It removes the session folder only if empty. If the video has been replaced, it preserves it. Older folders without video metadata can be imported, but their video is not deleted automatically. If the export fails, reopen the same folder to resume.
+
+You do not need to copy images or labels manually. Each session uses unique names, so videos with the same name do not overwrite dataset images. Do not replace the video of a session still in progress.
+
+**2. Run training:**
 
 ```powershell
-..\.venv\Scripts\python.exe detetar_camera.py --camera 0 --threshold 0.4 --gravar recording.mp4
+.\.venv\Scripts\python.exe treino_modelo/treinar.py
 ```
 
-Recording saves clean video by default. Add `--com-caixas` to include detection boxes and text.
+The cache is updated automatically. The best model is saved to `treino_modelo/firenet_grid.pt`.
 
-## Train and evaluate
-
-The code expects the dataset next to the project folder, in this layout:
-
-```text
-esp32cam-rc-car/
-├── treino_modelo/         # Training scripts and firenet_grid.pt
-├── .venv/                # Local Python environment
-└── Datasets/
-    └── Detecao_fogo/
-        ├── train/
-        │   ├── images/
-        │   └── labels/
-        └── valid/
-            ├── images/
-            └── labels/
-```
-
-Use `.jpg`, `.jpeg`, or `.png` images. Each label file must have the same base name as its image, with a `.txt` extension. Each flame uses one line:
-
-```text
-0 center_x center_y width height
-```
-
-Coordinates and dimensions are normalized to the image size (0 to 1). Use an empty label file for an image without flames. Keep training and validation data separate; avoid splitting near-identical frames from the same recording between them.
-
-Build the cache, train, and inspect predictions:
-
-```powershell
-..\.venv\Scripts\python.exe criar_cache.py
-..\.venv\Scripts\python.exe treinar.py
-..\.venv\Scripts\python.exe ver_resultados.py
-```
-
-Rebuild the cache whenever images, labels, or `IMAGE_SIZE` change. Training saves the best model to `firenet_grid.pt`. Visual validation results are saved to `resultados/previsoes_valid/`.
-
-## Prepare new images from a video
-
-```powershell
-..\.venv\Scripts\python.exe extrair_frames.py recording.mp4 --cada 10
-..\.venv\Scripts\python.exe anotar_imagens.py resultados/frames/recording_frames
-```
-
-Draw a box around each flame, or select **Sem chama** for an image without flames. Move the images and generated labels into the appropriate dataset folders, then rebuild the cache before training.
-
-## GitHub
-
-Commit the scripts and this README. Include the trained `.pt` file if others should be able to try webcam detection immediately. Exclude `.venv/`, `__pycache__/`, caches, and generated images/videos.
-
-## Export the model
-
-From the repository root, run:
+**3. Export the model:**
 
 ```powershell
 .\.venv\Scripts\python.exe treino_modelo/model_converter.py
 ```
 
-The converter reads `treino_modelo/firenet_grid.pt` and writes `treino_modelo/firenet.onnx`, independently of the current working directory. Copy the exported ONNX file to the Raspberry when deploying the inference application.
+The converter produces `treino_modelo/firenet.onnx`. Copy it to `firmware/raspberry/firenet.onnx` and then to the Raspberry Pi; this copy is not automatic.
 
-Training tools live here; Raspberry inference code stays in `firmware/raspberry/`, and the PC control server stays in `server/`.
+## Where files are stored
+
+```text
+esp32cam-firefighter/
+├── treino_modelo/
+│   ├── firenet_grid.pt
+│   └── resultados/
+│       ├── frames/<unique_session>/ ← images and labels during annotation
+│       ├── cache/                   ← prepared training data
+│       └── previsoes_valid/         ← visual validation results
+└── Datasets/Detecao_fogo/
+    ├── train/images/                ← finalized training images
+    ├── train/labels/                ← matching .txt files
+    ├── valid/images/                ← finalized validation images
+    ├── valid/labels/                ← matching .txt files
+    └── sessions/                    ← imported session records
+```
+
+During annotation, JPG files remain in the session folder and `.txt` files go in its `labels/` subfolder. An empty `.txt` means you confirmed that the image contains no flame.
+
+The split uses earlier frames for training and later frames for validation. Images from the same video can still be similar; use independent recordings for a reliable final evaluation.
+
+## Optional tools
+
+```powershell
+# Inspect results on the validation set
+.\.venv\Scripts\python.exe treino_modelo/ver_resultados.py
+
+# Show webcam predictions; press Q or Esc to exit
+.\.venv\Scripts\python.exe treino_modelo/detetar_camera.py
+
+# Record clean video while displaying webcam predictions
+.\.venv\Scripts\python.exe treino_modelo/detetar_camera.py --gravar sessao.mp4
+
+# Extract images without opening the annotator; prints the created folder
+.\.venv\Scripts\python.exe treino_modelo/extrair_frames.py sessao.mp4 --cada 60
+
+# Force a cache rebuild
+.\.venv\Scripts\python.exe treino_modelo/criar_cache.py
+```
+
+Webcam detection requires `firenet_grid.pt`, but does not require the dataset. Recordings do not include boxes by default; add `--com-caixas` to include them. Use video without boxes when collecting training data.
+
+Keep videos, datasets, caches, and the `.venv` environment out of Git commits.
