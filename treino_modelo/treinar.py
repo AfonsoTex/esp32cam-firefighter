@@ -1,3 +1,6 @@
+# Trains FireNet and evaluates it on validation data.
+# Saves the model whenever its validation score improves.
+
 import os
 import time
 
@@ -7,7 +10,7 @@ from dados import GRID_SIZE, IMAGE_SIZE, build_loader, PROJECT_DIR
 from modelo import FireNet
 
 
-CHECKPOINT = os.path.join(PROJECT_DIR, "resultados", "modelos", "firenet_grid.pt")
+CHECKPOINT = os.path.join(PROJECT_DIR, "firenet_grid.pt")
 
 POSITION_WEIGHT = 1
 

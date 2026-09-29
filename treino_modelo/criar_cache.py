@@ -1,3 +1,7 @@
+# Resizes and caches images and annotations to speed up training.
+# Avoids reopening and resizing each image in every training epoch.
+# Run again whenever the dataset or image size changes.
+
 import os
 import pickle
 import time

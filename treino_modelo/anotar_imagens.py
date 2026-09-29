@@ -1,4 +1,5 @@
-"""Draw flame boxes and save one YOLO class-0 label file per image."""
+# Opens a tool to draw boxes around flames in images.
+# Saves the annotations as YOLO-format text files.
 from pathlib import Path
 import argparse
 import os

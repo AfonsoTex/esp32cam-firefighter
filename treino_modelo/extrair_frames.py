@@ -1,14 +1,5 @@
-"""Parte um video em imagens .jpg.
-
-    python scripts/extrair_frames.py vela.mp4
-
-Cria a pasta  resultados/frames/vela_frames/  com as imagens la dentro, prontas para:
-
-    python scripts/anotar_imagens.py resultados/frames/vela_frames
-
-Por omissao guarda 1 frame em cada 10 (frames seguidos sao quase iguais).
-Para mudar:  python scripts/extrair_frames.py vela.mp4 --cada 5
-"""
+# Extracts images from a video at regular frame intervals.
+# Saves them for annotation and training.
 import argparse
 import os
 
@@ -28,7 +19,7 @@ if not video.isOpened():
 
 base = os.path.splitext(os.path.basename(args.video))[0]
 
-project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_dir = os.path.dirname(os.path.abspath(__file__))
 
 pasta = os.path.join(project_dir, "resultados", "frames", base + "_frames")
 

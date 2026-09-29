@@ -1,3 +1,6 @@
+# Tests the saved model on validation images and reports results.
+# Saves images with predictions in green and annotations in red.
+
 import os
 import cv2
 import torch

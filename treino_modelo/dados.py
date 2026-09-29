@@ -1,3 +1,6 @@
+# Loads cached images and annotations for training and validation.
+# Converts them into tensors and groups them into batches.
+
 import os
 import pickle
 
@@ -7,7 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CACHE_DIR = os.path.join(PROJECT_DIR, "resultados", "cache")
 

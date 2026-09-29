@@ -1,3 +1,6 @@
+# Defines the FireNet neural network.
+# Predicts flame presence, position, and size on an image grid.
+
 import torch.nn as nn
 
 

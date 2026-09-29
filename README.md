@@ -15,6 +15,10 @@ On boot, the ESP32 reads the WiFi networks stored in its flash (NVS) and scans t
 
 ## Architecture
 
+FireNet data preparation, training, evaluation, and ONNX export tools live in
+`treino_modelo/`. See `treino_modelo/README.md` for setup and conversion commands.
+Raspberry inference code lives in `firmware/raspberry/`.
+
 The ESP32 stays "dumb" on purpose: it captures and sends frames, receives commands, and drives the motors. All the thinking happens on the PC.
 
 **On the ESP32 (two cores, so heavy video never blocks driving):**
