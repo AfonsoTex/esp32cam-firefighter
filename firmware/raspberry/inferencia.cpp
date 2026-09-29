@@ -76,21 +76,19 @@ std::vector<Prediction> prever(const cv::Mat& frame)
     const char* inputNames[] = {"image"};
     const char* outputNames[] = {"predictions"};
 
-    // Create the ONNX tensor using:
-    // - memoryInfo: describes the type of memory used by the tensor.
-    // - input.data(): gives the address of the first input float in memory.
-    // - input.size(): gives the total number of input floats.
-    // - inputShape.data(): gives the address of the first shape value.
-    //   CreateTensor expects the shape values as one continuous block of memory,
-    //   so it starts at this address and reads the dimensions from there.
-    // - inputShape.size(): tells CreateTensor how many shape values to read.
-    Ort::Value inputTensor =
-        Ort::Value::CreateTensor<float>(
-            memoryInfo,
-            input.data(),
-            input.size(),
-            inputShape.data(),
-            inputShape.size()
+    // Run the model with the input tensor and get the output tensor back.
+    // Ort::RunOptions{nullptr} means default run options.
+    // The arguments are: input names, input tensors, number of inputs,
+    // output names and number of outputs we want to receive.
+    // The result is one Ort::Value for each requested output.
+    std::vector<Ort::Value> outputs =
+        session.Run(
+            Ort::RunOptions{nullptr},
+            inputNames,
+            &inputTensor,
+            1,
+            outputNames,
+            1
         );
 
     // Get direct access to the float values inside the output tensor.

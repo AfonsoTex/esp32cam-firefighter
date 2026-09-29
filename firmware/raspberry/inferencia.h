@@ -19,9 +19,10 @@ struct Prediction {
 // caminho is the path to the model file, for example "firenet.onnx".
 void carregarModelo(const std::string& caminho);
 
-// Receive a frame, prepare it, run the model, and return detections.
-// The input must be a non-empty, 8-bit BGR image with three channels.
+// Receive a frame, prepare it, run the model, and return the raw grid predictions.
+// The input must be a 128x128, 8-bit RGB image with three channels (see Camera::lerFrame).
 // The frame is passed by reference and must not be modified.
-// Return an empty vector when no flames are detected.
+// Always returns 32 * 32 predictions, one per grid cell, in row-major order.
+// The values are raw model outputs: presence, width and height still need a sigmoid.
 // Throws an exception if the model is not loaded or inference fails.
-std::vector<float> prever(const cv::Mat& frame);
+std::vector<Prediction> prever(const cv::Mat& frame);
