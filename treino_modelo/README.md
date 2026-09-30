@@ -27,7 +27,93 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install opencv-python==4.10.0.84 pillow
 ```
 
-All commands below also run from the repository root. They use the environment's Python directly, so activation is not required.
+The Python tool commands below run from the repository root; recording runs on the Raspberry Pi and file transfer runs on the PC. They use the environment's Python directly, so activation is not required.
+
+## Criar um dataset com vídeos próprios
+
+Processo da gravação na Raspberry até ao treino no PC. Os caminhos das ferramentas e do dataset são relativos à pasta do projeto. Os comandos Python pressupõem o ambiente `.venv` já preparado, conforme a configuração acima.
+
+### 1 Gravar vídeo na Raspberry
+
+- Gravar situações reais, com e sem chama, sem caixas de deteção.
+
+- Não precisamos de alterar o programa: podemos gravar com rpicam-vid.
+
+- No terminal da Raspberry, para o FireNet com Ctrl+C para libertar a câmara. Depois executa:
+
+```bash
+rpicam-vid -n -t 60000 --width 640 --height 480 \
+  --framerate 30 --rotation 180 --codec libav -o ~/sessao01.mp4
+```
+
+- Grava 60 segundos em /home/afonso/sessao01.mp4. A rotação de 180° corrige a orientação atual da câmara. Usa outro nome nas gravações seguintes para não substituir a anterior.
+
+### 2 Passar o vídeo para o PC
+
+- O vídeo pode ficar em qualquer pasta do PC; não precisa de estar dentro do projeto.
+
+- Exemplo para o Desktop, executado no PowerShell do PC:
+
+```powershell
+scp afonso@BaraoForrester.local:~/sessao01.mp4 "C:\Users\afons\Desktop\"
+```
+
+- A cópia fica em C:\Users\afons\Desktop\sessao01.mp4. O original continua na Raspberry.
+
+### 3 Partir o vídeo em frames
+
+- No PowerShell do PC, entra na pasta do projeto e abre a ferramenta:
+
+```powershell
+cd "C:\Users\afons\Desktop\Project-esp32cam\esp32cam-firefighter"
+.\.venv\Scripts\python.exe treino_modelo/anotar_imagens.py
+```
+
+- Escolhe “Abrir video novo”: abre uma janela para selecionares o vídeo, onde quer que esteja.
+
+- A ferramenta usa automaticamente extrair_frames.py para extrair frames; não precisas de o executar diretamente.
+
+- Escolhe o intervalo: por exemplo, uma imagem a cada 60 frames, aproximadamente dois segundos num vídeo de 30 fps.
+
+- Os frames vão para treino_modelo/resultados/frames/<sessão>/, independentemente da localização do vídeo.
+
+### 4 Anotar as imagens
+
+- Na mesma ferramenta, desenha caixas nas chamas e guarda com Enter; quando não houver chama, escolhe “Sem chama”.
+
+- As imagens continuam na pasta da sessão. Cada imagem recebe um .txt com as anotações na subpasta labels/. Um .txt vazio significa que confirmaste que não há chama.
+
+- Podes parar e usar “Continuar imagens ja extraidas”, selecionando a pasta da sessão.
+
+### 5 Enviar para o dataset
+
+- Carrega em “Finalizar” e confirma a divisão, por defeito 80% para treino e 20% para validação.
+
+- A ferramenta copia automaticamente para estas pastas, dentro do projeto:
+
+```text
+Datasets/Detecao_fogo/
+  train/images/   imagens de treino
+  train/labels/   respetivas anotações
+  valid/images/   imagens de validação
+  valid/labels/   respetivas anotações
+```
+
+- **Depois da confirmação e de verificar as cópias, a ferramenta apaga os temporários da sessão e o vídeo selecionado no PC. O vídeo na Raspberry mantém-se. Se quiseres conservar também o vídeo no PC, anota uma cópia.**
+
+### 6 Preparar cache e treinar
+
+- No PowerShell do PC, dentro da pasta do projeto, executa:
+
+```powershell
+.\.venv\Scripts\python.exe treino_modelo/treinar.py
+```
+
+- O treino prepara a cache automaticamente; não precisas de executar criar_cache.py separadamente.
+
+- A cache guarda os dados já preparados para acelerar o treino, em treino_modelo/resultados/cache/.
+
+- O modelo resultante fica em treino_modelo/firenet_grid.pt.
 
 ## Normal workflow: annotate → train → export
 

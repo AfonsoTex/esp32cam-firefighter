@@ -1,10 +1,12 @@
 #include "camera.h"
 #include "inferencia.h"
+#include "video_server.h"
 
 #include <opencv2/opencv.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <csignal>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -18,8 +20,17 @@ constexpr int GRID_SIZE = 32;
 // Minimum confidence (0..1) needed to draw a flame box.
 constexpr float CONFIDENCE_THRESHOLD = 0.4f;
 
-// The window shows the 128x128 frame enlarged to this size.
+// The browser shows the 128x128 frame enlarged to this size.
 constexpr int DISPLAY_SIZE = 512;
+constexpr unsigned short HTTP_PORT = 8080;
+
+// Signal handlers only set a flag; normal code releases the resources.
+volatile std::sig_atomic_t stopRequested = 0;
+
+void requestStop(int)
+{
+    stopRequested = 1;
+}
 
 // Path to the trained model. Run the program from the folder that contains it.
 const std::string MODEL_PATH = "firenet.onnx";
@@ -132,6 +143,9 @@ void drawDetections(cv::Mat& image, const std::vector<Detection>& detections)
 
 int main()
 {
+    std::signal(SIGINT, requestStop);
+    std::signal(SIGTERM, requestStop);
+
     // 1. Open the camera.
     Camera camera;
 
@@ -149,50 +163,65 @@ int main()
         return 1;
     }
 
-    std::cout << "A correr. Prime qualquer tecla na janela do video para sair." << std::endl;
-
-    cv::Mat frame;
-
-    // 3. Capture frames continuously and run the model on each one.
-    while (true) {
-
-        // The frame is already 128x128 and RGB, as the model expects.
-        if (!camera.lerFrame(frame)) {
-            std::cerr << "Nao consegui ler mais frames da camara." << std::endl;
-            break;
-        }
-
-        std::vector<Prediction> predictions;
-
-        try {
-            predictions = prever(frame);
-        } catch (const std::exception& error) {
-            std::cerr << "Erro na inferencia: " << error.what() << std::endl;
-            break;
-        }
-
-        std::vector<Detection> detections = getDetections(predictions);
-
-        // 4. Prepare the image to show: OpenCV windows expect BGR, not RGB.
-        cv::Mat display;
-        cv::cvtColor(frame, display, cv::COLOR_RGB2BGR);
-        cv::resize(display, display, cv::Size(DISPLAY_SIZE, DISPLAY_SIZE));
-
-        drawDetections(display, detections);
-
-        cv::imshow("FireNet - deteccao ao vivo", display);
-
-        // 5. Leave the loop as soon as any key is pressed (-1 means no key).
-        int key = cv::waitKey(1);
-
-        if (key != -1) {
-            break;
-        }
+    VideoServer server;
+    if (!server.start(HTTP_PORT)) {
+        std::cerr << "Nao consegui abrir o servidor HTTP na porta " << HTTP_PORT << std::endl;
+        return 1;
     }
 
-    // Release the camera and close the window.
-    camera.libertar();
-    cv::destroyAllWindows();
+    std::cout << "Video disponivel em http://BaraoForrester.local:" << HTTP_PORT
+              << "/ (ou usa o IP da Raspberry). Ctrl+C para sair." << std::endl;
 
-    return 0;
+    cv::Mat frame;
+    int exitCode = 0;
+
+    // 3. Capture frames continuously and run the model on each one.
+    try {
+        while (!stopRequested) {
+
+            // The frame is already 128x128 and RGB, as the model expects.
+            if (!camera.lerFrame(frame)) {
+                std::cerr << "Nao consegui ler mais frames da camara." << std::endl;
+                exitCode = 1;
+                break;
+            }
+
+            std::vector<Prediction> predictions;
+
+            try {
+                predictions = prever(frame);
+            } catch (const std::exception& error) {
+                std::cerr << "Erro na inferencia: " << error.what() << std::endl;
+                exitCode = 1;
+                break;
+            }
+
+            std::vector<Detection> detections = getDetections(predictions);
+
+            // 4. OpenCV's JPEG encoder expects BGR, while the model receives RGB.
+            cv::Mat display;
+            cv::cvtColor(frame, display, cv::COLOR_RGB2BGR);
+            cv::resize(display, display, cv::Size(DISPLAY_SIZE, DISPLAY_SIZE));
+
+            drawDetections(display, detections);
+
+            // 5. Publish a JPEG for the browser, without opening a desktop window.
+            std::vector<unsigned char> jpeg;
+            if (!cv::imencode(".jpg", display, jpeg, {cv::IMWRITE_JPEG_QUALITY, 80})) {
+                std::cerr << "Erro ao codificar a imagem JPEG." << std::endl;
+                exitCode = 1;
+                break;
+            }
+            server.publish(jpeg);
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "Erro no processamento do video: " << error.what() << std::endl;
+        exitCode = 1;
+    }
+
+    // Stop browser connections and release the camera.
+    server.stop();
+    camera.libertar();
+
+    return exitCode;
 }

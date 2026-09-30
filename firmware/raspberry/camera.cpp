@@ -1,5 +1,6 @@
 #include "camera.h"
 #include <iostream>
+#include <string>
 
 Camera::Camera() {}
 
@@ -8,7 +9,17 @@ Camera::~Camera() {
 }
 
 bool Camera::abrir(int index) {
-    cap.open(index);
+    // Capture through libcamera and deliver BGR frames to OpenCV.
+    const std::string pipeline =
+    "libcamerasrc ! "
+    "video/x-raw,format=NV12,width=640,height=480,"
+    "framerate=30/1,colorimetry=bt709 ! "
+    "videoconvert ! "
+    "video/x-raw,format=BGR ! "
+    "appsink max-buffers=1 drop=true sync=false";
+
+    cap.open(pipeline, cv::CAP_GSTREAMER);
+
     if (!cap.isOpened()) {
         std::cerr << "Erro ao abrir a câmara." << std::endl;
         return false;
@@ -18,16 +29,19 @@ bool Camera::abrir(int index) {
 
 bool Camera::lerFrame(cv::Mat& frame) {
     if (!cap.isOpened()) return false;
-    
+
     cv::Mat frameOriginal;
-    cap >> frameOriginal; // Captura no formato original (BGR)
-    
+    cap >> frameOriginal; // Capture a BGR frame from GStreamer.
+
     if (frameOriginal.empty()) return false;
 
-    // 1. Redimensionar para 128x128
+    // Resize the frame to the model input size.
     cv::resize(frameOriginal, frame, cv::Size(128, 128));
 
-    // 2. Converter de BGR para RGB
+    // Correct the camera orientation before inference and display.
+    cv::rotate(frame, frame, cv::ROTATE_180);
+
+    // Convert BGR to RGB for the model.
     cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
 
     return true;
