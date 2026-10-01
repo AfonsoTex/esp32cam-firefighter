@@ -1,5 +1,5 @@
 #pragma once
-// ── Câmara OV2640 e streaming de vídeo por UDP ──────────────────────
+// Configures the OV2640 camera and streams video over UDP.
 #include "esp_camera.h"
 
 void setup_camera();

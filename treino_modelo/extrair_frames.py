@@ -20,7 +20,7 @@ def extract_frames(video_path, every=10, frames_root=None):
     import cv2
 
     if every < 1:
-        raise ValueError("O intervalo deve ser pelo menos 1 fotograma.")
+        raise ValueError("The interval must be at least 1 frame.")
     video_path = Path(video_path).resolve(strict=True)
     if frames_root is None:
         frames_root = Path(__file__).resolve().parent / "resultados" / "frames"
@@ -30,7 +30,7 @@ def extract_frames(video_path, every=10, frames_root=None):
     video = cv2.VideoCapture(str(video_path))
     if not video.isOpened():
         video.release()
-        raise ValueError(f"Nao consegui abrir {video_path}")
+        raise ValueError(f"Could not open {video_path}")
     before = file_hash(video_path)
     folder.mkdir(parents=True, exist_ok=False)
     metadata = {
@@ -51,15 +51,15 @@ def extract_frames(video_path, every=10, frames_root=None):
             if index % every == 0:
                 destination = folder / f"frame_{index:09d}.jpg"
                 if not cv2.imwrite(str(destination), frame):
-                    raise OSError(f"Nao consegui guardar {destination}")
+                    raise OSError(f"Could not save {destination}")
                 saved += 1
             index += 1
     finally:
         video.release()
     if saved == 0:
-        raise ValueError("O video nao produziu imagens.")
+        raise ValueError("The video produced no images.")
     if file_hash(video_path) != before:
-        raise ValueError("O video foi alterado durante a extracao. Foi preservado.")
+        raise ValueError("The video changed during extraction. It was preserved.")
     metadata["complete"] = True
     metadata["frames"] = saved
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -68,9 +68,9 @@ def extract_frames(video_path, every=10, frames_root=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("video", help="Ficheiro de video")
+    parser.add_argument("video", help="Video file")
     parser.add_argument("--cada", type=int, default=10,
-                        help="Guarda 1 frame em cada N (por omissao 10)")
+                        help="Save 1 frame every N frames (default: 10)")
     args = parser.parse_args()
     print(extract_frames(args.video, args.cada))
 

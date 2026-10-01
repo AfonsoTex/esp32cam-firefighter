@@ -29,91 +29,80 @@ python -m venv .venv
 
 The Python tool commands below run from the repository root; recording runs on the Raspberry Pi and file transfer runs on the PC. They use the environment's Python directly, so activation is not required.
 
-## Criar um dataset com vídeos próprios
+## Create a dataset from your own videos
 
-Processo da gravação na Raspberry até ao treino no PC. Os caminhos das ferramentas e do dataset são relativos à pasta do projeto. Os comandos Python pressupõem o ambiente `.venv` já preparado, conforme a configuração acima.
+Record on the Raspberry Pi, then annotate and train on the PC. Tool and dataset paths are relative to the repository root. Prepare the `.venv` environment as described above first.
 
-### 1 Gravar vídeo na Raspberry
+### 1. Record video on the Raspberry Pi
 
-- Gravar situações reais, com e sem chama, sem caixas de deteção.
-
-- Não precisamos de alterar o programa: podemos gravar com rpicam-vid.
-
-- No terminal da Raspberry, para o FireNet com Ctrl+C para libertar a câmara. Depois executa:
+- Record real situations with and without flames, without detection boxes.
+- Use `rpicam-vid`. Stop FireNet with Ctrl+C first to release the camera.
+- Run in the Raspberry Pi terminal:
 
 ```bash
 rpicam-vid -n -t 60000 --width 640 --height 480 \
   --framerate 30 --rotation 180 --codec libav -o ~/sessao01.mp4
 ```
 
-- Grava 60 segundos em /home/afonso/sessao01.mp4. A rotação de 180° corrige a orientação atual da câmara. Usa outro nome nas gravações seguintes para não substituir a anterior.
+- Records 60 seconds to `/home/afonso/sessao01.mp4`. The 180° rotation corrects the current camera orientation. Use a different filename for each recording to avoid overwriting it.
 
-### 2 Passar o vídeo para o PC
+### 2. Copy the video to the PC
 
-- O vídeo pode ficar em qualquer pasta do PC; não precisa de estar dentro do projeto.
-
-- Exemplo para o Desktop, executado no PowerShell do PC:
+- The video can be in any PC folder; it does not need to be inside the project.
+- To copy it to the Desktop, run in PowerShell on the PC:
 
 ```powershell
 scp afonso@BaraoForrester.local:~/sessao01.mp4 "C:\Users\afons\Desktop\"
 ```
 
-- A cópia fica em C:\Users\afons\Desktop\sessao01.mp4. O original continua na Raspberry.
+- The copy is saved to `C:\Users\afons\Desktop\sessao01.mp4`. The original remains on the Raspberry Pi.
 
-### 3 Partir o vídeo em frames
+### 3. Extract video frames
 
-- No PowerShell do PC, entra na pasta do projeto e abre a ferramenta:
+- In PowerShell on the PC, open the project folder and start the annotator:
 
 ```powershell
 cd "C:\Users\afons\Desktop\Project-esp32cam\esp32cam-firefighter"
 .\.venv\Scripts\python.exe treino_modelo/anotar_imagens.py
 ```
 
-- Escolhe “Abrir video novo”: abre uma janela para selecionares o vídeo, onde quer que esteja.
+- Choose **Open new video** and select the video from any folder.
+- The annotator uses `extrair_frames.py` automatically; you do not need to run it directly.
+- Choose an interval: every 60 frames means approximately two seconds for a 30 fps video.
+- Frames go to `treino_modelo/resultados/frames/<session>/`, regardless of the video's location.
 
-- A ferramenta usa automaticamente extrair_frames.py para extrair frames; não precisas de o executar diretamente.
+### 4. Annotate the images
 
-- Escolhe o intervalo: por exemplo, uma imagem a cada 60 frames, aproximadamente dois segundos num vídeo de 30 fps.
+- In the same tool, draw a box around each flame and save with Enter. Choose **No flame** for images without flames.
+- Images stay in the session folder. Each image gets a `.txt` annotation file in the `labels/` subfolder. An empty `.txt` confirms that there is no flame.
+- To continue later, choose **Resume extracted images** and select the session folder.
 
-- Os frames vão para treino_modelo/resultados/frames/<sessão>/, independentemente da localização do vídeo.
+### 5. Send the session to the dataset
 
-### 4 Anotar as imagens
-
-- Na mesma ferramenta, desenha caixas nas chamas e guarda com Enter; quando não houver chama, escolhe “Sem chama”.
-
-- As imagens continuam na pasta da sessão. Cada imagem recebe um .txt com as anotações na subpasta labels/. Um .txt vazio significa que confirmaste que não há chama.
-
-- Podes parar e usar “Continuar imagens ja extraidas”, selecionando a pasta da sessão.
-
-### 5 Enviar para o dataset
-
-- Carrega em “Finalizar” e confirma a divisão, por defeito 80% para treino e 20% para validação.
-
-- A ferramenta copia automaticamente para estas pastas, dentro do projeto:
+- Click **Finalize** and confirm the split: by default, 80% training and 20% validation.
+- The tool automatically copies files into these project folders:
 
 ```text
 Datasets/Detecao_fogo/
-  train/images/   imagens de treino
-  train/labels/   respetivas anotações
-  valid/images/   imagens de validação
-  valid/labels/   respetivas anotações
+  train/images/   training images
+  train/labels/   matching annotations
+  valid/images/   validation images
+  valid/labels/   matching annotations
 ```
 
-- **Depois da confirmação e de verificar as cópias, a ferramenta apaga os temporários da sessão e o vídeo selecionado no PC. O vídeo na Raspberry mantém-se. Se quiseres conservar também o vídeo no PC, anota uma cópia.**
+- **After confirmation and copy verification, the tool deletes the session files and the selected video on the PC. The Raspberry Pi video remains. To keep the PC video too, annotate a copy.**
 
-### 6 Preparar cache e treinar
+### 6. Prepare the cache and train
 
-- No PowerShell do PC, dentro da pasta do projeto, executa:
+- In PowerShell on the PC, from the repository root, run:
 
 ```powershell
 .\.venv\Scripts\python.exe treino_modelo/treinar.py
 ```
 
-- O treino prepara a cache automaticamente; não precisas de executar criar_cache.py separadamente.
-
-- A cache guarda os dados já preparados para acelerar o treino, em treino_modelo/resultados/cache/.
-
-- O modelo resultante fica em treino_modelo/firenet_grid.pt.
+- Training updates the cache automatically using `criar_cache.py`; you do not need to run it separately.
+- The cache stores prepared data in `treino_modelo/resultados/cache/` to speed up training.
+- The best model is saved to `treino_modelo/firenet_grid.pt`.
 
 ## Normal workflow: annotate → train → export
 
@@ -123,13 +112,11 @@ Datasets/Detecao_fogo/
 .\.venv\Scripts\python.exe treino_modelo/anotar_imagens.py
 ```
 
-The interface currently uses Portuguese button labels, shown below with their English meanings.
-
-- Choose **Abrir video novo** (Open new video) and select the video.
+- Choose **Open new video** and select the video.
 - Choose the interval: 60 saves one image every 60 frames, not every 60 seconds.
-- Draw a box around each flame and press **Enter**. If there is no flame, choose **Sem chama** (No flame).
-- To continue later, choose **Continuar imagens ja extraidas** (Resume extracted images) and open the session folder. The program starts at the first image without a label and skips annotated images after saving.
-- Once every image is annotated, click **Finalizar** (Finalize). The default split is 80% training and 20% validation; you can adjust the percentage.
+- Draw a box around each flame and press **Enter**. If there is no flame, choose **No flame**.
+- To continue later, choose **Resume extracted images** and open the session folder. The program starts at the first image without a label and skips annotated images after saving.
+- Once every image is annotated, click **Finalize**. The default split is 80% training and 20% validation; you can adjust the percentage.
 
 **After confirmation**, the program copies the images and labels to the dataset, verifies the copies, and deletes the session originals and source video. It removes the session folder only if empty. If the video has been replaced, it preserves it. Older folders without video metadata can be imported, but their video is not deleted automatically. If the export fails, reopen the same folder to resume.
 
@@ -195,3 +182,40 @@ The split uses earlier frames for training and later frames for validation. Imag
 Webcam detection requires `firenet_grid.pt`, but does not require the dataset. Recordings do not include boxes by default; add `--com-caixas` to include them. Use video without boxes when collecting training data.
 
 Keep videos, datasets, caches, and the `.venv` environment out of Git commits.
+
+## Common model problems and what to do
+
+### 1. The model misses some flames
+
+- Record more examples of these situations, varying distance, lighting, and position.
+- Annotate the flames, add the images to the dataset, and retrain.
+- Simply running a video through the model does not teach it.
+
+### 2. The model detects flames where there are none
+
+- Record the locations and objects that trigger false detections, without flames.
+- Mark these images as **No flame**, add them to the dataset, and retrain.
+
+### 3. The model detects more flames than there are
+
+- Boxes on objects without flames: follow point 2.
+- Multiple boxes on the same flame: a duplicate detection filter may be needed. More training data alone may not solve this.
+
+### 4. High training score, low validation score
+
+A student scores 99% on exercises they studied but 72% on a new test. They handle familiar exercises well but struggle when the examples change. Similarly, the model may have learned the training images too specifically.
+
+- Collect more varied situations.
+- Use image variations during training (data augmentation).
+- Check that training and validation cover comparable situations, using separate examples.
+- A training score of 100% alone does not prove memorization; compare it with validation.
+
+### 5. Around 80% on both training and validation
+
+A student scores 80% on familiar exercises and 80% on a new test. There is little gap between familiar and new material, but some material is still being missed.
+
+- Review the examples and annotations for mistakes or missing situations.
+- Check whether more training improves the results.
+- If performance stops improving, review training settings and model capacity. These scores alone do not prove that a larger network is needed.
+
+These are performance scores, not the dataset split of 80% training images and 20% validation images. In this project, evaluation uses a detection score based on matching predicted and annotated centers, rather than simple image accuracy. Training-set evaluation is disabled by default (`MEASURE_TRAIN = False`).

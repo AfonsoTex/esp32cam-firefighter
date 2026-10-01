@@ -29,10 +29,10 @@ def decode(text, width, height):
             continue
         fields = line.split()
         if len(fields) != 5 or fields[0] != '0':
-            raise ValueError('O label deve ter classe 0 e quatro coordenadas por linha.')
+            raise ValueError('Each label line must contain class 0 and four coordinates.')
         x, y, w, h = map(float, fields[1:])
         if not all(math.isfinite(v) and 0 <= v <= 1 for v in (x, y, w, h)) or w <= 0 or h <= 0:
-            raise ValueError('Coordenadas invalidas no label.')
+            raise ValueError('Invalid label coordinates.')
         boxes.append(((x-w/2)*width, (y-h/2)*height,
                       (x+w/2)*width, (y+h/2)*height))
     return boxes
@@ -50,37 +50,37 @@ def prepare_export(folder, train_percent=80, dataset=None):
         dataset = DATASET_DIR
     dataset = Path(dataset).resolve()
     if folder.is_relative_to(dataset) or dataset.is_relative_to(folder):
-        raise ValueError("Escolhe uma pasta de recolha fora do dataset.")
+        raise ValueError("Choose a capture folder outside the dataset.")
     plan_path = folder / "export_plan.json"
     if plan_path.exists():
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         if plan["folder"] != str(folder) or plan["dataset"] != str(dataset):
-            raise ValueError("O destino desta sessao mudou. Reabre no local original.")
+            raise ValueError("This session's destination has changed. Reopen it at its original location.")
         return plan
     if not 1 <= train_percent <= 99:
-        raise ValueError("A percentagem de treino deve estar entre 1 e 99.")
+        raise ValueError("The training percentage must be between 1 and 99.")
     files = sorted(p for p in folder.iterdir()
                    if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
     if len(files) < 2:
-        raise ValueError("Sao precisas pelo menos duas imagens para dividir treino e validacao.")
+        raise ValueError("At least two images are required to split training and validation.")
     if len({p.stem.casefold() for p in files}) != len(files):
-        raise ValueError("Existem imagens com nomes base repetidos.")
+        raise ValueError("Some images have duplicate base names.")
     metadata = {}
     if (folder / "session.json").exists():
         metadata = json.loads((folder / "session.json").read_text(encoding="utf-8"))
         if not metadata.get("complete"):
-            raise ValueError("A extracao desta sessao nao terminou.")
+            raise ValueError("Frame extraction for this session has not finished.")
         if "frames" in metadata and metadata["frames"] != len(files):
-            raise ValueError("O numero de imagens mudou desde a extracao. O video sera preservado.")
+            raise ValueError("The image count has changed since extraction. The video will be preserved.")
     session_id = uuid.uuid4().hex
     train_count = max(1, min(len(files) - 1, round(len(files) * train_percent / 100)))
     entries = []
     for index, image in enumerate(files):
         label = folder / "labels" / (image.stem + ".txt")
         if image.is_symlink() or label.is_symlink() or (folder / "labels").is_symlink():
-            raise ValueError("A sessao nao pode conter ligacoes para outros ficheiros.")
+            raise ValueError("The session must not contain links to other files.")
         if not label.is_file():
-            raise ValueError(f"Falta anotar: {image.name}")
+            raise ValueError(f"Missing annotation: {image.name}")
         with Image.open(image) as picture:
             decode(label.read_text(encoding="utf-8"), *picture.size)
             picture.verify()
@@ -100,40 +100,40 @@ def finish_export(plan):
     folder = Path(plan["folder"]).resolve(strict=True)
     dataset = Path(plan["dataset"]).resolve()
     if folder.is_relative_to(dataset) or dataset.is_relative_to(folder):
-        raise ValueError("A pasta da sessao e o dataset devem estar separados.")
+        raise ValueError("The session folder and dataset must be separate.")
     session_id = str(uuid.UUID(plan["id"]).hex)
     plan_path = folder / "export_plan.json"
     serialized = json.dumps(plan, indent=2)
     if plan_path.exists():
         if json.loads(plan_path.read_text(encoding="utf-8")) != plan:
-            raise ValueError("O plano de exportacao mudou.")
+            raise ValueError("The export plan has changed.")
     else:
         with plan_path.open("x", encoding="utf-8") as target:
             target.write(serialized)
     pairs = []
     for entry in plan["entries"]:
         if entry["split"] not in ("train", "valid"):
-            raise ValueError("Divisao de dataset invalida.")
+            raise ValueError("Invalid dataset split.")
         for kind, subfolder in [("image", "images"), ("label", "labels")]:
             name = entry[kind]
             if Path(name).name != name or name in (".", ".."):
-                raise ValueError("Nome de ficheiro invalido.")
+                raise ValueError("Invalid filename.")
             source = folder / name
             if kind == "label":
                 source = folder / "labels" / name
             if source.is_symlink() or source.parent.is_symlink():
-                raise ValueError("A origem nao pode ser uma ligacao.")
+                raise ValueError("The source must not be a link.")
             destination = dataset / entry["split"] / subfolder / (session_id + "_" + name)
             if not destination.resolve().is_relative_to(dataset):
-                raise ValueError("Destino fora do dataset.")
+                raise ValueError("Destination outside the dataset.")
             expected = entry[kind + "_hash"]
             if source.exists() and file_hash(source) != expected:
-                raise ValueError(f"Ficheiro alterado desde a confirmacao: {source}")
+                raise ValueError(f"File changed since confirmation: {source}")
             if destination.exists():
                 if destination.is_symlink() or file_hash(destination) != expected:
-                    raise ValueError(f"Destino existente com conteudo diferente: {destination}")
+                    raise ValueError(f"Existing destination has different contents: {destination}")
             elif not source.is_file():
-                raise ValueError(f"Ficheiro em falta: {source}")
+                raise ValueError(f"Missing file: {source}")
             pairs.append((source, destination, expected))
     # Copy everything before removing any original; never overwrite a dataset file.
     for source, destination, expected in pairs:
@@ -144,16 +144,16 @@ def finish_export(plan):
         try:
             shutil.copyfile(source, temporary)
             if file_hash(temporary) != expected:
-                raise OSError(f"A verificacao da copia falhou: {source}")
+                raise OSError(f"Copy verification failed: {source}")
             os.link(temporary, destination)
         finally:
             if temporary.exists():
                 temporary.unlink()
     for source, destination, expected in pairs:
         if file_hash(destination) != expected:
-            raise OSError(f"A verificacao do dataset falhou: {destination}")
+            raise OSError(f"Dataset verification failed: {destination}")
         if source.exists() and file_hash(source) != expected:
-            raise ValueError(f"A origem mudou durante a copia: {source}")
+            raise ValueError(f"Source changed during copying: {source}")
     receipts = dataset / "sessions"
     receipts.mkdir(parents=True, exist_ok=True)
     (receipts / (session_id + ".json")).write_text(serialized, encoding="utf-8")
@@ -191,9 +191,9 @@ class Annotator:
         self.files = sorted(p for p in folder.iterdir()
                             if p.is_file() and p.suffix.lower() in ('.jpg', '.jpeg', '.png'))
         if not self.files:
-            raise ValueError('Nao encontrei fotografias diretamente nesta pasta.')
+            raise ValueError('No images found directly in this folder.')
         if len({p.stem.casefold() for p in self.files}) != len(self.files):
-            raise ValueError('Existem imagens com o mesmo nome base. Renomeia-as primeiro.')
+            raise ValueError('Some images have the same base name. Rename them first.')
         if folder.name == 'images' and folder.parent.name in ('train', 'valid'):
             self.labels = folder.parent / 'labels'
         else:
@@ -202,24 +202,24 @@ class Annotator:
         self.index = next((i for i,p in enumerate(self.files)
                            if not (self.labels / (p.stem+'.txt')).exists()), 0)
         self.boxes, self.dirty, self.start = [], False, None
-        root.title('Anotar chamas')
+        root.title('Annotate flames')
         root.geometry('1100x850')
         root.minsize(850, 650)
         self.heading = ttk.Label(root, font=('Segoe UI', 12, 'bold'))
         self.heading.pack(pady=10)
-        ttk.Label(root, text='Arrasta com o rato em volta de CADA chama. Podes desenhar varias caixas.').pack()
+        ttk.Label(root, text='Drag around EACH flame. You can draw multiple boxes.').pack()
         self.canvas = tk.Canvas(root, background='#20242a', highlightthickness=0)
         self.canvas.pack(fill='both', expand=True, padx=12, pady=10)
         self.status = ttk.Label(root)
         self.status.pack(pady=5)
         buttons = ttk.Frame(root)
         buttons.pack(pady=10)
-        for text, action in [('Anterior', lambda:self.navigate(-1)),
-                             ('Desfazer caixa (Ctrl+Z)', self.undo),
-                             ('Limpar caixas', self.clear),
-                             ('Guardar e seguinte (Enter)', self.save),
-                             ('Sem chama (N)', self.no_flame),
-                             ('Saltar', lambda:self.navigate(1))]:
+        for text, action in [('Previous', lambda:self.navigate(-1)),
+                             ('Undo box (Ctrl+Z)', self.undo),
+                             ('Clear boxes', self.clear),
+                             ('Save and next (Enter)', self.save),
+                             ('No flame (N)', self.no_flame),
+                             ('Skip', lambda:self.navigate(1))]:
             ttk.Button(buttons, text=text, command=action).pack(side='left', padx=3)
         ttk.Label(root, text=f'Labels: {self.labels}', wraplength=1000).pack(pady=(0,10))
         self.canvas.bind('<Configure>', lambda e:self.redraw())
@@ -231,13 +231,13 @@ class Annotator:
         root.bind('n', lambda e:self.no_flame())
         root.bind('N', lambda e:self.no_flame())
         root.protocol('WM_DELETE_WINDOW', self.close)
-        ttk.Button(root, text='Finalizar: enviar para treino e validacao',
+        ttk.Button(root, text='Finalize: send to training and validation',
                    command=self.finalize).pack(pady=5)
         self.load()
 
     def finalize(self):
         if self.dirty:
-            messagebox.showinfo('Guardar primeiro', 'Guarda a anotacao atual antes de finalizar.')
+            messagebox.showinfo('Save first', 'Save the current annotation before finalizing.')
             return
         finalize_session(self.root, self.folder)
 
@@ -269,9 +269,9 @@ class Annotator:
                                          outline='#40ff70',width=2)
             self.canvas.create_text(left+4,top+4,text=str(number),anchor='nw',fill='#40ff70')
         saved=sum((self.labels/(p.stem+'.txt')).exists() for p in self.files)
-        state='Alteracoes por guardar' if self.dirty else ('Anotada' if self.label_path().exists() else 'Por anotar')
+        state='Unsaved changes' if self.dirty else ('Annotated' if self.label_path().exists() else 'Not annotated')
         self.heading.config(text=f'{self.index+1}/{len(self.files)} — {self.files[self.index].name}')
-        self.status.config(text=f'{state} | {len(self.boxes)} caixas | {saved}/{len(self.files)} imagens anotadas')
+        self.status.config(text=f'{state} | {len(self.boxes)} boxes | {saved}/{len(self.files)} annotated images')
 
     def point(self,event):
         return (min(self.width,max(0,(event.x-self.ox)/self.scale)),
@@ -311,19 +311,19 @@ class Annotator:
             self.redraw()
 
     def clear(self):
-        if self.boxes and messagebox.askyesno('Limpar','Retirar todas as caixas desta imagem?'):
+        if self.boxes and messagebox.askyesno('Clear','Remove all boxes from this image?'):
             self.boxes=[]
             self.dirty=True
             self.redraw()
 
     def save(self):
         if not self.boxes:
-            messagebox.showinfo('Sem caixas','Se nao ha chama, usa o botao "Sem chama". Para deixar por anotar, usa "Saltar".')
+            messagebox.showinfo('No boxes','If there is no flame, use "No flame". To leave the image unannotated, use "Skip".')
             return
         self.write_label()
 
     def no_flame(self):
-        if self.boxes and not messagebox.askyesno('Sem chama','Apagar as caixas e marcar esta imagem SEM chama?'):
+        if self.boxes and not messagebox.askyesno('No flame','Delete the boxes and mark this image as having NO flame?'):
             return
         self.boxes=[]
         self.dirty=True
@@ -336,7 +336,7 @@ class Annotator:
             temporary.write_text(encode(self.boxes,self.width,self.height),encoding='utf-8')
             os.replace(temporary,destination)
         except OSError as exc:
-            messagebox.showerror('Nao foi possivel guardar',str(exc))
+            messagebox.showerror('Could not save',str(exc))
             return
         self.dirty=False
         for offset in range(1, len(self.files) + 1):
@@ -347,10 +347,10 @@ class Annotator:
                 self.load()
                 return
         self.redraw()
-        messagebox.showinfo('Sessao anotada', 'Todas as imagens estao anotadas. Carrega em Finalizar para enviar para o dataset.')
+        messagebox.showinfo('Session annotated', 'All images are annotated. Click Finalize to send them to the dataset.')
 
     def can_leave(self):
-        return not self.dirty or messagebox.askyesno('Alteracoes por guardar','Descartar as alteracoes desta imagem?')
+        return not self.dirty or messagebox.askyesno('Unsaved changes','Discard changes to this image?')
 
     def navigate(self,delta):
         target=self.index+delta
@@ -367,55 +367,55 @@ def finalize_session(root, folder):
     try:
         percent = 80
         if not (folder / "export_plan.json").exists():
-            percent = simpledialog.askinteger("Divisao do dataset", "Percentagem para treino (o resto vai para validacao):",
+            percent = simpledialog.askinteger("Dataset split", "Training percentage (the remainder goes to validation):",
                                               initialvalue=80, minvalue=1, maxvalue=99, parent=root)
             if percent is None:
                 return
         plan = prepare_export(folder, percent)
-        video_text = "Video original: nao identificado; nao sera apagado."
+        video_text = "Original video: unidentified; it will not be deleted."
         if plan.get("video"):
-            video_text = "Apagar o video original depois da copia: " + plan["video"]
-        message = (f"Treino: {plan['train']} imagens\nValidacao: {plan['valid']} imagens\n"
-                   f"Destino: {plan['dataset']}\n\n"
-                   f"Apagar as imagens e labels desta sessao depois de verificar a copia:\n{folder}\n\n"
-                   f"{video_text}\n\nConfirmar?")
-        if not messagebox.askyesno("Finalizar sessao", message, parent=root):
+            video_text = "Delete the original video after copying: " + plan["video"]
+        message = (f"Training: {plan['train']} images\nValidation: {plan['valid']} images\n"
+                   f"Destination: {plan['dataset']}\n\n"
+                   f"Delete this session's images and labels after verifying the copy:\n{folder}\n\n"
+                   f"{video_text}\n\nConfirm?")
+        if not messagebox.askyesno("Finalize session", message, parent=root):
             return
         root.config(cursor="watch")
         root.update_idletasks()
         kept = finish_export(plan)
-        result = "Sessao adicionada ao dataset. Agora basta correr treinar.py."
+        result = "Session added to the dataset. You can now run treinar.py."
         if kept:
-            result += "\nO video mudou e foi preservado: " + kept
+            result += "\nThe video changed and was preserved: " + kept
         if folder.exists():
-            result += "\nOutros ficheiros na pasta foram preservados."
-        messagebox.showinfo("Concluido", result, parent=root)
+            result += "\nOther files in the folder were preserved."
+        messagebox.showinfo("Completed", result, parent=root)
         root.destroy()
         return True
     except Exception as exc:
         root.config(cursor="")
-        messagebox.showerror("Exportacao nao concluida", str(exc) + "\nPodes reabrir esta pasta para tentar novamente.", parent=root)
+        messagebox.showerror("Export incomplete", str(exc) + "\nYou can reopen this folder to try again.", parent=root)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('folder', nargs='?', type=Path, help='Video ou pasta de imagens')
+    parser.add_argument('folder', nargs='?', type=Path, help='Video or image folder')
     args = parser.parse_args()
     root = tk.Tk()
     source = args.folder
     if source is None:
         selected = tk.StringVar(root)
-        root.title('Anotar chamas')
+        root.title('Annotate flames')
         def choose_video():
-            path = filedialog.askopenfilename(title='Escolhe o video', filetypes=[('Videos', '*.mp4 *.avi *.mkv *.mov *.h264'), ('Todos', '*.*')])
+            path = filedialog.askopenfilename(title='Choose a video', filetypes=[('Videos', '*.mp4 *.avi *.mkv *.mov *.h264'), ('All files', '*.*')])
             if path:
                 selected.set(path)
         def choose_folder():
-            path = filedialog.askdirectory(title='Continuar uma pasta de imagens')
+            path = filedialog.askdirectory(title='Resume an image folder')
             if path:
                 selected.set(path)
-        ttk.Button(root, text='Abrir video novo', command=choose_video).pack(padx=30, pady=15)
-        ttk.Button(root, text='Continuar imagens ja extraidas', command=choose_folder).pack(padx=30, pady=15)
+        ttk.Button(root, text='Open new video', command=choose_video).pack(padx=30, pady=15)
+        ttk.Button(root, text='Resume extracted images', command=choose_folder).pack(padx=30, pady=15)
         root.protocol('WM_DELETE_WINDOW', lambda: selected.set('__cancel__'))
         root.wait_variable(selected)
         if selected.get() == '__cancel__':
@@ -427,7 +427,7 @@ def main():
     try:
         source = source.resolve(strict=True)
         if source.is_file():
-            every = simpledialog.askinteger('Extrair imagens', 'Guardar uma imagem a cada quantos fotogramas?', initialvalue=60, minvalue=1, parent=root)
+            every = simpledialog.askinteger('Extract images', 'Save one image every how many frames?', initialvalue=60, minvalue=1, parent=root)
             if every is None:
                 root.destroy()
                 return
@@ -441,7 +441,7 @@ def main():
             return
         Annotator(root, source)
     except Exception as exc:
-        messagebox.showerror('Nao foi possivel abrir', str(exc), parent=root)
+        messagebox.showerror('Could not open', str(exc), parent=root)
         root.destroy()
         return
     root.mainloop()

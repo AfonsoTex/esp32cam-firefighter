@@ -22,7 +22,7 @@ bool inicializarServos()
         }
     }
     if (!std::filesystem::exists(PWMCHIP + "/pwm3")) {
-        // ainda nao exportado
+        // Export the channel if it is not available yet.
         std::ofstream f(PWMCHIP + "/export");
         if (!f) {
             return false;

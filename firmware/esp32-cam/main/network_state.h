@@ -1,13 +1,10 @@
 #pragma once
-// ── Estado de rede partilhado ───────────────────────────────────────
-// Variáveis e definições usadas tanto pelo main.ino (loop principal)
-// como pelo wifi_manager e camera_stream. Ficam aqui para não haver
-// cópias diferentes da mesma variável em vários ficheiros.
+// Declares shared network state for the main loop, Wi-Fi manager, and camera.
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
-// Port where comandos.py listens. Video uses 1884 (see camara.py).
+// The PC server listens for control on port 1883 and video on port 1884.
 // IP picks the machine, port picks which program on it.
 #define SERVER_PORT 1883
 #define VIDEO_PORT 1884

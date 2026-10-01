@@ -18,7 +18,7 @@
 constexpr int GRID_SIZE = 32;
 
 // Minimum confidence (0..1) needed to draw a flame box.
-constexpr float CONFIDENCE_THRESHOLD = 0.4f;
+constexpr float CONFIDENCE_THRESHOLD = 0.6;
 
 // The browser shows the 128x128 frame enlarged to this size.
 constexpr int DISPLAY_SIZE = 512;
@@ -102,7 +102,7 @@ std::vector<Detection> getDetections(const std::vector<Prediction>& predictions)
 }
 
 
-// Draw one rectangle and one "fogo 0.87" label for each detection.
+// Draw one rectangle and one "fire 0.87" label for each detection.
 void drawDetections(cv::Mat& image, const std::vector<Detection>& detections)
 {
     int imageWidth = image.cols;
@@ -128,9 +128,9 @@ void drawDetections(cv::Mat& image, const std::vector<Detection>& detections)
         cv::rectangle(image, cv::Point(xMin, yMin), cv::Point(xMax, yMax),
                       cv::Scalar(0, 255, 0), 2);
 
-        // Build the label text with two decimal places, for example "fogo 0.87".
+        // Build the label text with two decimal places, for example "fire 0.87".
         std::ostringstream label;
-        label << "fogo " << std::fixed << std::setprecision(2) << detection.confidence;
+        label << "fire " << std::fixed << std::setprecision(2) << detection.confidence;
 
         // Put the label above the box, but never above the top of the image.
         int labelY = std::max(15, yMin - 8);
@@ -157,7 +157,7 @@ int main()
     try {
         carregarModelo(MODEL_PATH);
     } catch (const std::exception& error) {
-        std::cerr << "Erro ao carregar o modelo " << MODEL_PATH << ": "
+        std::cerr << "Could not load model " << MODEL_PATH << ": "
                   << error.what() << std::endl;
         camera.libertar();
         return 1;
@@ -165,12 +165,12 @@ int main()
 
     VideoServer server;
     if (!server.start(HTTP_PORT)) {
-        std::cerr << "Nao consegui abrir o servidor HTTP na porta " << HTTP_PORT << std::endl;
+        std::cerr << "Could not start the HTTP server on port " << HTTP_PORT << std::endl;
         return 1;
     }
 
-    std::cout << "Video disponivel em http://BaraoForrester.local:" << HTTP_PORT
-              << "/ (ou usa o IP da Raspberry). Ctrl+C para sair." << std::endl;
+    std::cout << "Video available at http://BaraoForrester.local:" << HTTP_PORT
+              << "/ (or use the Raspberry Pi IP address). Press Ctrl+C to exit." << std::endl;
 
     cv::Mat frame;
     int exitCode = 0;
@@ -181,7 +181,7 @@ int main()
 
             // The frame is already 128x128 and RGB, as the model expects.
             if (!camera.lerFrame(frame)) {
-                std::cerr << "Nao consegui ler mais frames da camara." << std::endl;
+                std::cerr << "Could not read another camera frame." << std::endl;
                 exitCode = 1;
                 break;
             }
@@ -191,7 +191,7 @@ int main()
             try {
                 predictions = prever(frame);
             } catch (const std::exception& error) {
-                std::cerr << "Erro na inferencia: " << error.what() << std::endl;
+                std::cerr << "Inference error: " << error.what() << std::endl;
                 exitCode = 1;
                 break;
             }
@@ -208,14 +208,14 @@ int main()
             // 5. Publish a JPEG for the browser, without opening a desktop window.
             std::vector<unsigned char> jpeg;
             if (!cv::imencode(".jpg", display, jpeg, {cv::IMWRITE_JPEG_QUALITY, 80})) {
-                std::cerr << "Erro ao codificar a imagem JPEG." << std::endl;
+                std::cerr << "Could not encode the JPEG image." << std::endl;
                 exitCode = 1;
                 break;
             }
             server.publish(jpeg);
         }
     } catch (const std::exception& error) {
-        std::cerr << "Erro no processamento do video: " << error.what() << std::endl;
+        std::cerr << "Video processing error: " << error.what() << std::endl;
         exitCode = 1;
     }
 

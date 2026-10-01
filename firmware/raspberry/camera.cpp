@@ -21,7 +21,7 @@ bool Camera::abrir(int index) {
     cap.open(pipeline, cv::CAP_GSTREAMER);
 
     if (!cap.isOpened()) {
-        std::cerr << "Erro ao abrir a câmara." << std::endl;
+        std::cerr << "Could not open the camera." << std::endl;
         return false;
     }
     return true;

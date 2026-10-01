@@ -13,11 +13,11 @@
 
 namespace {
 const std::string PAGE = R"HTML(<!doctype html>
-<html lang="pt">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FireNet — Câmara</title>
+  <title>FireNet — Camera</title>
   <style>
     body { margin: 0; background: #13191f; color: #e9eef3;
            font: 17px system-ui, sans-serif; }
@@ -32,11 +32,11 @@ const std::string PAGE = R"HTML(<!doctype html>
 <body>
   <main>
     <h1>FireNet</h1>
-    <p>Vídeo da câmara com as deteções do modelo.</p>
+    <p>Camera video with model detections.</p>
     <img src="/stream.mjpg" width="512" height="512"
-         alt="Vídeo da câmara. Se não aparecer, verifica se o FireNet está a correr.">
-    <p>As caixas verdes mostram as deteções; o número indica a confiança do modelo.</p>
-    <p>Se o vídeo parar, verifica o programa na Raspberry e <a href="/">volta a ligar</a>.</p>
+         alt="Camera video. If it does not appear, check that FireNet is running.">
+    <p>Green boxes show detections; the number indicates model confidence.</p>
+    <p>If the video stops, check the program on the Raspberry Pi and <a href="/">reconnect</a>.</p>
   </main>
 </body>
 </html>)HTML";
@@ -79,7 +79,7 @@ bool VideoServer::start(unsigned short port)
             workers.emplace_back(&VideoServer::serve, this);
         }
     } catch (const std::exception& error) {
-        std::cerr << "Erro ao iniciar servidor HTTP: " << error.what() << '\n';
+        std::cerr << "Could not start the HTTP server: " << error.what() << '\n';
         stop();
         return false;
     }
@@ -145,7 +145,7 @@ void VideoServer::serve()
         try {
             handleClient(client);
         } catch (const std::exception& error) {
-            std::cerr << "Erro na ligacao HTTP: " << error.what() << '\n';
+            std::cerr << "HTTP connection error: " << error.what() << '\n';
         }
         close(client);
     }

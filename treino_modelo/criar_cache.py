@@ -101,7 +101,7 @@ def ensure_cache(force=False):
     for split in ("train", "valid"):
         samples = build_split(split)
         if not samples:
-            raise ValueError(f"O dataset {split} esta vazio. Finaliza uma sessao no anotador primeiro.")
+            raise ValueError(f"The {split} dataset is empty. Finalize a session in the annotator first.")
         digest = hashlib.sha256(str(IMAGE_SIZE).encode())
         for image_path, boxes in samples:
             image = Path(image_path)

@@ -1,14 +1,5 @@
-"""Abre a webcam do PC e corre o FireNet em tempo real sobre cada frame.
-
-Carrega sempre o "melhor modelo" porque o treinar.py só regrava o
-firenet_grid.pt quando a pontuacao de validacao melhora - por isso o
-ficheiro que la esta e sempre o melhor que ja treinaste, nao precisamos
-de procurar entre varios checkpoints.
-
-Correr, de dentro da pasta do projeto (com o venv-treino ativo):
-    python detetar_camera.py
-Sai com a tecla "q" ou ESC.
-"""
+# Runs FireNet on webcam frames using the best saved validation checkpoint.
+# Optionally records clean video for training. Press Q or Esc to exit.
 import argparse
 import time
 from collections import deque
@@ -22,20 +13,15 @@ from modelo import FireNet
 from treinar import CHECKPOINT, get_boxes
 
 
-# Filtro temporal: so anuncia FOGO se tiver detetado em pelo menos
-# MINIMO dos ultimos HISTORICO frames. Serve para o aviso nao piscar
-# quando a probabilidade anda a passear a volta do limiar.
+# Temporally smooths the alert: require detections in MINIMO of the last HISTORICO frames.
 HISTORICO = 5
 
 MINIMO = 3
 
 
 def preprocess(frame):
-    # ANTES: frame da webcam, BGR, altura x largura originais (ex.: 480x640x3).
-    # OPERACAO: mesma sequencia usada no treino (criar_cache.py) - converter
-    # para RGB, redimensionar para 128x128 (a proporcao original nao e
-    # preservada, tal como no treino) e normalizar os pixeis para 0..1.
-    # DEPOIS: tensor 1x3x128x128, o formato que o FireNet espera.
+    # Converts BGR to RGB, resizes to the training size, and normalizes to 0..1.
+    # Returns a tensor with shape 1x3x128x128.
     image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     image = cv2.resize(image, (IMAGE_SIZE, IMAGE_SIZE))
 
@@ -50,10 +36,7 @@ def draw_detections(frame, boxes):
     height, width = frame.shape[:2]
 
     for x, y, box_width, box_height in boxes:
-        # x, y, box_width, box_height vem normalizado (0..1), independente
-        # do tamanho do frame - por isso multiplicamos pela largura/altura
-        # reais da imagem da webcam, e nao pelos 128x128 usados so na
-        # entrada do modelo.
+        # Converts normalized box coordinates to pixels in the original webcam image.
         x_min = int((x - box_width / 2) * width)
         y_min = int((y - box_height / 2) * height)
         x_max = int((x + box_width / 2) * width)
@@ -63,29 +46,22 @@ def draw_detections(frame, boxes):
         y_min, y_max = max(0, y_min), min(height - 1, y_max)
 
         cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-        cv2.putText(frame, "fogo", (x_min, max(0, y_min - 8)),
+        cv2.putText(frame, "fire", (x_min, max(0, y_min - 8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     return frame
 
 
 def open_camera(index):
-    # ANTES: nenhuma ligacao a camara.1
-    # OPERACAO: tenta abrir com dois "backends" diferentes do Windows
-    # (MSMF, depois DSHOW) porque uma webcam pode responder a isOpened()
-    # com True num deles e mesmo assim nunca entregar um frame valido -
-    # foi o que aconteceu na ultima tentativa (DSHOW sozinho). Para cada
-    # backend, tenta ler ate 30 frames (~3s) antes de desistir, porque
-    # alguns drivers precisam de um instante para "aquecer" apos abrir.
-    # DEPOIS: capture pronta a usar, ou None se nenhum backend resultou.
+    # Tries Windows camera backends in order. Each gets up to 30 attempts to read a frame.
     backends = [
         ("MSMF", cv2.CAP_MSMF),
         ("DSHOW", cv2.CAP_DSHOW),
-        ("padrao", cv2.CAP_ANY),
+        ("default", cv2.CAP_ANY),
     ]
 
     for name, backend in backends:
-        print(f"A tentar abrir a camara {index} com o backend {name}...")
+        print(f"Trying camera {index} with the {name} backend...")
         capture = cv2.VideoCapture(index, backend)
 
         if not capture.isOpened():
@@ -95,7 +71,7 @@ def open_camera(index):
         for _ in range(30):
             ok, frame = capture.read()
             if ok and frame is not None:
-                print(f"Camara aberta com o backend {name}.")
+                print(f"Camera opened with the {name} backend.")
                 return capture
             time.sleep(0.1)
 
@@ -105,23 +81,20 @@ def open_camera(index):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Run FireNet on the PC webcam and optionally record video.")
     parser.add_argument("--camera", type=int, default=0,
-                         help="indice da camara (0 = a primeira/padrao)")
+                         help="camera index (0 = first/default camera)")
     parser.add_argument("--threshold", type=float, default=0.4,
-                         help="confianca minima para desenhar uma deteccao")
+                         help="minimum confidence required to draw a detection")
     parser.add_argument("--gravar", type=str, default=None,
-                         help="grava o video para este ficheiro, ex.: sala.mp4")
+                         help="record video to this file, e.g. room.mp4")
     parser.add_argument("--com-caixas", action="store_true",
-                         help="grava a imagem com as caixas e o texto por cima "
-                              "(sem isto grava a imagem limpa da camara, que e "
-                              "o que serve para treinar)")
+                         help="record the image with boxes and text overlays "
+                              "(otherwise record clean camera frames, which are "
+                              "suitable for training)")
     args = parser.parse_args()
 
-    # get_boxes (definido em treinar.py) le CONFIDENCE_THRESHOLD do modulo
-    # train no momento em que corre - por isso, para o --threshold ter
-    # efeito, atualizamos a constante do modulo em vez de passar um
-    # argumento (a funcao nao aceita um).
+    # get_boxes reads the threshold from treinar, so update that module before inference.
     treinar.CONFIDENCE_THRESHOLD = args.threshold
 
     model = FireNet()
@@ -129,30 +102,24 @@ def main():
     model.load_state_dict(checkpoint["weights"])
     model.eval()
 
-    print(f"Modelo carregado de {CHECKPOINT} (score guardado: {checkpoint['score']:.2f}%)")
+    print(f"Model loaded from {CHECKPOINT} (saved score: {checkpoint['score']:.2f}%)")
 
     capture = open_camera(args.camera)
 
     if capture is None:
         raise RuntimeError(
-            f"Nao consegui abrir a camara {args.camera} com nenhum backend. "
-            "Verifica em Definicoes > Privacidade e seguranca > Camara se "
-            "'Permitir que as aplicacoes de ambiente de trabalho acedam a "
-            "camara' esta ativo, fecha outras apps que possam esta-la a "
-            "usar (Teams, Camara, um separador do browser), e tenta outro "
-            "indice com --camera 1."
+            f"Could not open camera {args.camera} with any backend. "
+            "In Settings > Privacy & security > Camera, enable camera access "
+            "for desktop apps. Close other apps using the camera "
+            "(Teams, Camera, or browser tabs), and try another index with --camera 1."
         )
 
-    print("A correr. Prime 'q' ou ESC na janela do video para sair.")
+    print("Running. Press 'q' or Esc in the video window to exit.")
 
-    # Guarda os ultimos HISTORICO resultados (True/False). deque com
-    # maxlen deita fora o mais antigo sozinho quando enche.
+    # Keeps the latest results; deque automatically discards the oldest when full.
     historico = deque(maxlen=HISTORICO)
 
-    # VideoWriter e o gravador do OpenCV: recebe frames um a um e escreve
-    # o ficheiro de video. So o criamos quando --gravar foi pedido, e so
-    # depois do primeiro frame, porque precisamos do tamanho real da
-    # imagem que a camara esta a dar.
+    # Creates the video writer after the first frame, when the image dimensions are known.
     writer = None
 
     try:
@@ -160,41 +127,34 @@ def main():
             ok, frame = capture.read()
 
             if not ok:
-                print("Nao consegui ler mais frames da camara.")
+                print("Could not read another camera frame.")
                 break
 
-            # Copia da imagem limpa, antes de lhe desenharmos por cima.
-            # E esta que gravamos quando queremos frames para treinar.
+            # Keeps a clean copy for training recordings before drawing detections.
             limpo = frame.copy()
 
             with torch.no_grad():
                 prediction = model(preprocess(frame))[0]
 
-            # ANTES: prediction[0] -> 32 x 32 numeros em bruto, um por
-            #        posicao espacial da grelha.
-            # OPERACAO: sigmoide converte cada um numa probabilidade 0..1;
-            #        max() fica com a posicao mais confiante da imagem.
-            # DEPOIS: 1 numero. E este que anda a passear a volta do
-            #        limiar e faz a caixa piscar - por isso mostramo-lo.
+            # Converts grid logits to confidence scores and displays the highest score.
             melhor = torch.sigmoid(prediction[0]).max().item()
 
             boxes = get_boxes(prediction)
 
             historico.append(len(boxes) > 0)
 
-            # So conta como fogo se apareceu em MINIMO dos ultimos frames.
+            # Requires detections in at least MINIMO recent frames to show a stable alert.
             estavel = sum(historico) >= MINIMO
 
             frame = draw_detections(frame, boxes)
 
-            status = f"FOGO DETETADO ({len(boxes)})" if estavel else "sem fogo"
+            status = f"FIRE DETECTED ({len(boxes)})" if estavel else "no fire"
             color = (0, 0, 255) if estavel else (0, 200, 0)
             cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
                         0.9, color, 2)
 
-            # Numero de cima: a confianca mais alta desta imagem.
-            # Numero de baixo: o limiar a partir do qual conta como fogo.
-            cv2.putText(frame, f"max {melhor:.2f}  limiar {args.threshold:.2f}"
+            # Displays the highest confidence and the detection threshold.
+            cv2.putText(frame, f"max {melhor:.2f}  threshold {args.threshold:.2f}"
                         f"  {sum(historico)}/{len(historico)}",
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (255, 255, 0), 2)
@@ -204,25 +164,23 @@ def main():
                 if writer is None:
                     altura, largura = frame.shape[:2]
 
-                    # Alguns drivers devolvem 0 em CAP_PROP_FPS; nesse
-                    # caso assumimos 20 frames por segundo.
+                    # Uses 20 fps if the camera driver does not report a usable frame rate.
                     fps = capture.get(cv2.CAP_PROP_FPS)
                     if not fps or fps <= 1:
                         fps = 20.0
 
-                    # mp4v e o codec; tem de bater certo com a extensao
-                    # .mp4 do ficheiro.
+                    # The mp4v codec is used for MP4 output.
                     codec = cv2.VideoWriter_fourcc(*"mp4v")
 
                     writer = cv2.VideoWriter(args.gravar, codec, fps,
                                              (largura, altura))
 
-                    print(f"A gravar para {args.gravar} "
+                    print(f"Recording to {args.gravar} "
                           f"({largura}x{altura}, {fps:.0f} fps)")
 
                 writer.write(frame if args.com_caixas else limpo)
 
-            cv2.imshow("FireNet - deteccao ao vivo", frame)
+            cv2.imshow("FireNet - live detection", frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):  # 27 = ESC
@@ -230,7 +188,7 @@ def main():
     finally:
         if writer is not None:
             writer.release()
-            print(f"Video gravado: {args.gravar}")
+            print(f"Video saved: {args.gravar}")
 
         capture.release()
         cv2.destroyAllWindows()

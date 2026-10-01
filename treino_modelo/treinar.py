@@ -247,8 +247,8 @@ if __name__ == "__main__":
 
         report(f"epoch {epoch + 1:2d}  valid", results)
 
-        print(f"epoch {epoch + 1:2d}   treino {train_seconds:.0f}s"
-              f"   eval treino {eval_train_seconds:.0f}s"
+        print(f"epoch {epoch + 1:2d}   train {train_seconds:.0f}s"
+              f"   eval train {eval_train_seconds:.0f}s"
               f"   eval valid {eval_valid_seconds:.0f}s")
 
         score = results[4]

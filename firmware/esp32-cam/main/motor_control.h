@@ -1,5 +1,5 @@
 #pragma once
-// ── Controlo dos motores (ponte H L293D) ────────────────────────────
+// Controls the motors through the L293D H-bridge.
 
 void pinos_setup();
 void pwm_channel_setup();

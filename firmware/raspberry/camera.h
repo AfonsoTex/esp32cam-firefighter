@@ -2,8 +2,7 @@
 #define CAMERA_H
 
 #include <opencv2/opencv.hpp> 
-//importar um ficheiro "mestre" que carrega automaticamente 
-//quase todos os módulos essenciais da biblioteca para processamento de imagem e visão computacional.
+// Includes OpenCV image processing and video capture interfaces.
 
 class Camera{
     private:

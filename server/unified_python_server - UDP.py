@@ -331,16 +331,16 @@ def image_processing_thread():
     cv2.destroyAllWindows()
 
 # ==========================================
-# MAIN: SERVIDOR DE CONTROLO E INTERFACE PYGAME
+# MAIN: CONTROL SERVER AND PYGAME INTERFACE
 # ==========================================
 def main():
     global autonomous_mode, auto_direction, auto_move
     
-    # Inicia a Thread 1 (Receção de Vídeo)
+    # Start thread 1 (video reception).
     t_rx = threading.Thread(target=video_rx_thread, daemon=True)
     t_rx.start()
 
-    # Inicia a Thread 2 (Processamento de Imagem)
+    # Start thread 2 (image processing).
     t_proc = threading.Thread(target=image_processing_thread, daemon=True)
     t_proc.start()
 
@@ -466,7 +466,7 @@ def main():
                             last_sent_time = time.time()
 
                         elif time.time() - last_sent_time > 0.2:
-                            # Heartbeat enviado via UDP
+                            # Send a heartbeat over UDP.
                             server_control.sendto(b'HB\n', esp_addr)
                             last_sent_time = time.time()
 
