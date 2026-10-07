@@ -1,13 +1,14 @@
 from pathlib import Path
 
 import torch
-from modelo import FireNet
+from model import FireNet
+from data import IMAGE_SIZE
 
 # Resolve model files relative to this script, regardless of the working directory.
 model_directory = Path(__file__).resolve().parent
 output_path = model_directory / "firenet.onnx"
 
-# Create the network using the architecture defined in modelo.py.
+# Create the network using the architecture defined in model.py.
 model = FireNet()
 
 # Load the saved checkpoint onto the CPU.
@@ -23,9 +24,9 @@ model.load_state_dict(checkpoint["weights"])
 # Set the network to evaluation mode.
 model.eval()
 
-# Create an example input: 1 RGB image, 128 pixels high and wide.
+# Create an example input: 1 RGB image, IMAGE_SIZE pixels high and wide.
 # This defines the input shape; it does not train the network.
-example = torch.zeros(1, 3, 128, 128)
+example = torch.zeros(1, 3, IMAGE_SIZE, IMAGE_SIZE)
 
 # Export the network operations and trained parameters into one ONNX file.
 torch.onnx.export(

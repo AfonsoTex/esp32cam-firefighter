@@ -2,7 +2,7 @@
 # Saves the annotations as YOLO-format text files.
 # After confirmation, copies images and labels into the dataset's train/valid folders.
 # Verifies every copy before deleting the session frames and its unchanged source video.
-# No manual file copying is needed; run treinar.py after finishing the session.
+# No manual file copying is needed; run train.py after finishing the session.
 from pathlib import Path
 import argparse
 import os
@@ -13,7 +13,7 @@ import uuid
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 
-from extrair_frames import extract_frames, file_hash
+from extract_frames import extract_frames, file_hash
 
 
 def encode(boxes, width, height):
@@ -38,7 +38,51 @@ def decode(text, width, height):
     return boxes
 
 
-DATASET_DIR = Path(__file__).resolve().parent.parent / "Datasets" / "Detecao_fogo"
+DATASET_DIR = Path(__file__).resolve().parent.parent / "Datasets" / "fire_detection"
+
+
+def excluded_images(folder):
+    # Excluded frames stay recoverable but never enter training or validation.
+    archive = folder / ".deleted"
+    if archive.is_symlink():
+        raise ValueError("The deleted-image folder must not be a link.")
+    if not archive.exists():
+        return []
+    return [p for p in archive.iterdir()
+            if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png")]
+
+
+def delete_session_image(folder, image, labels):
+    folder = Path(folder).resolve(strict=True)
+    image = Path(image)
+    labels = Path(labels)
+    if (folder / "export_plan.json").exists():
+        raise ValueError("Finish the pending export before changing this session.")
+    if (image.is_symlink() or image.resolve().parent != folder
+            or labels.is_symlink() or labels.resolve() != folder / "labels"):
+        raise ValueError("Delete image is only available for local session images.")
+    if folder.is_relative_to(DATASET_DIR.resolve()):
+        raise ValueError("Delete image is not available inside the finalized dataset.")
+    if image.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+        raise ValueError("Unsupported image type.")
+    label = labels / (image.stem + ".txt")
+    if label.is_symlink():
+        raise ValueError("The annotation must not be a link.")
+    excluded_images(folder)
+    archive = folder / ".deleted"
+    archive.mkdir(exist_ok=True)
+    target_image = archive / image.name
+    target_label = archive / label.name
+    if target_image.exists() or target_label.exists():
+        raise ValueError("An excluded file already has this name.")
+    # Move both files together; roll back if moving the annotation fails.
+    image.rename(target_image)
+    try:
+        if label.exists():
+            label.rename(target_label)
+    except OSError:
+        target_image.rename(image)
+        raise
 
 
 def prepare_export(folder, train_percent=80, dataset=None):
@@ -70,7 +114,7 @@ def prepare_export(folder, train_percent=80, dataset=None):
         metadata = json.loads((folder / "session.json").read_text(encoding="utf-8"))
         if not metadata.get("complete"):
             raise ValueError("Frame extraction for this session has not finished.")
-        if "frames" in metadata and metadata["frames"] != len(files):
+        if "frames" in metadata and metadata["frames"] != len(files) + len(excluded_images(folder)):
             raise ValueError("The image count has changed since extraction. The video will be preserved.")
     session_id = uuid.uuid4().hex
     train_count = max(1, min(len(files) - 1, round(len(files) * train_percent / 100)))
@@ -221,6 +265,7 @@ class Annotator:
                              ('No flame (N)', self.no_flame),
                              ('Skip', lambda:self.navigate(1))]:
             ttk.Button(buttons, text=text, command=action).pack(side='left', padx=3)
+        ttk.Button(root, text='Delete image', command=self.delete_image).pack(pady=(0, 5))
         ttk.Label(root, text=f'Labels: {self.labels}', wraplength=1000).pack(pady=(0,10))
         self.canvas.bind('<Configure>', lambda e:self.redraw())
         self.canvas.bind('<ButtonPress-1>', self.press)
@@ -316,6 +361,28 @@ class Annotator:
             self.dirty=True
             self.redraw()
 
+    def delete_image(self):
+        image = self.files[self.index]
+        if not messagebox.askyesno(
+                'Delete image',
+                f'Remove {image.name} and its annotation from this session?\n'
+                'Unsaved boxes will be discarded. The files remain recoverable in .deleted '
+                'and will not enter the dataset.', parent=self.root):
+            return
+        try:
+            delete_session_image(self.folder, image, self.labels)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror('Could not delete image', str(exc), parent=self.root)
+            return
+        self.files.pop(self.index)
+        self.dirty, self.start = False, None
+        if not self.files:
+            messagebox.showinfo('Empty session', 'No images remain to annotate.', parent=self.root)
+            self.root.destroy()
+            return
+        self.index = min(self.index, len(self.files) - 1)
+        self.load()
+
     def save(self):
         if not self.boxes:
             messagebox.showinfo('No boxes','If there is no flame, use "No flame". To leave the image unannotated, use "Skip".')
@@ -384,7 +451,7 @@ def finalize_session(root, folder):
         root.config(cursor="watch")
         root.update_idletasks()
         kept = finish_export(plan)
-        result = "Session added to the dataset. You can now run treinar.py."
+        result = "Session added to the dataset. You can now run train.py."
         if kept:
             result += "\nThe video changed and was preserved: " + kept
         if folder.exists():

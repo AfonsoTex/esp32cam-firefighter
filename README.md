@@ -16,7 +16,7 @@ On boot, the ESP32 reads the WiFi networks stored in its flash (NVS) and scans t
 ## Architecture
 
 FireNet data preparation, training, evaluation, and ONNX export tools live in
-`treino_modelo/`. See `treino_modelo/README.md` for setup and conversion commands.
+`model_training/`. See `model_training/README.md` for setup and conversion commands.
 Raspberry inference code lives in `firmware/raspberry/`.
 
 The ESP32 stays "dumb" on purpose: it captures and sends frames, receives commands, and drives the motors. All the thinking happens on the PC.
@@ -25,7 +25,7 @@ The ESP32 stays "dumb" on purpose: it captures and sends frames, receives comman
 - **Core 0** captures JPEG frames from the OV2640 and streams them to the PC over **UDP** (port 1884).
 - **Core 1** receives `MOV:x,DIR:y` commands over **UDP** (port 1883) and drives the motors.
 
-**On the PC (`server/unified_python_server.py`), three threads:**
+**On the PC (`server/unified_python_server - UDP.py`), three threads:**
 - **Receive** — reads UDP video packets and reassembles each JPEG frame, keeping only the most recent one.
 - **Processing** — runs the vision pipeline (grayscale, threshold, morphology, contours), finds the line's centre, computes steering, and runs the follow/recovery state machine.
 - **Main** — reads the gamepad and sends commands to the car.
@@ -93,7 +93,7 @@ A small **state machine** handles losing the line: normal follow, and a recovery
 3. Upload to the ESP32.
 
 **PC server**
-1. Run `python server/unified_python_server.py` (needs opencv-python, numpy, pygame).
+1. Run `python "server/unified_python_server - UDP.py"` (needs opencv-python, numpy, pygame).
 2. Power the car. It connects automatically.
 3. Press the gamepad button to toggle between manual and line-following modes.
 
@@ -104,7 +104,7 @@ A small **state machine** handles losing the line: normal follow, and a recovery
 
 ## Tuning (important — read this)
 
-The line follower is **not plug-and-play**. The parameters at the top of `unified_python_server.py` must be adjusted to **your** floor, tape, lighting, and car. Key ones:
+The line follower is **not plug-and-play**. The parameters at the top of `unified_python_server - UDP.py` must be adjusted to **your** floor, tape, lighting, and car. Key ones:
 
 - **Tape and floor contrast.** The line must stand out from the floor in brightness. Dark tape on a light floor works; matte tape and a non-reflective floor avoid the light-reflection problems that plagued early tests (reflections read as near-white and confuse detection).
 - **Threshold / block size.** Adjust so the processed view shows a clean solid line, no floor patches, no holes.
@@ -123,8 +123,9 @@ The line follower is **not plug-and-play**. The parameters at the top of `unifie
 
 ```
 firmware/esp32-cam/main/  ESP32 firmware (main.ino) + config.h
-firmware/raspberry/       Raspberry Pi servo control (C++ / lgpio)
-server/          unified_python_server.py (video + control + line following)
+firmware/raspberry/       FireNet inference, browser video, servo aiming and pump control
+model_training/  FireNet annotation, training, evaluation, and export tools
+server/          unified_python_server - UDP.py (video + control + line following)
 hardware/        3D chassis (STL to print, F3D source)
 docs/            photos, thumbnails
 ```

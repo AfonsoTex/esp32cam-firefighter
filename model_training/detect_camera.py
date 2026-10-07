@@ -7,10 +7,10 @@ from collections import deque
 import cv2
 import torch
 
-import treinar
-from dados import IMAGE_SIZE
-from modelo import FireNet
-from treinar import CHECKPOINT, get_boxes
+import train
+from data import IMAGE_SIZE
+from model import FireNet
+from train import CHECKPOINT, get_boxes
 
 
 # Temporally smooths the alert: require detections in MINIMO of the last HISTORICO frames.
@@ -21,7 +21,7 @@ MINIMO = 3
 
 def preprocess(frame):
     # Converts BGR to RGB, resizes to the training size, and normalizes to 0..1.
-    # Returns a tensor with shape 1x3x128x128.
+    # Returns a tensor with shape 1x3x180x180.
     image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     image = cv2.resize(image, (IMAGE_SIZE, IMAGE_SIZE))
 
@@ -86,16 +86,16 @@ def main():
                          help="camera index (0 = first/default camera)")
     parser.add_argument("--threshold", type=float, default=0.4,
                          help="minimum confidence required to draw a detection")
-    parser.add_argument("--gravar", type=str, default=None,
+    parser.add_argument("--record", type=str, default=None,
                          help="record video to this file, e.g. room.mp4")
-    parser.add_argument("--com-caixas", action="store_true",
+    parser.add_argument("--with-boxes", action="store_true",
                          help="record the image with boxes and text overlays "
                               "(otherwise record clean camera frames, which are "
                               "suitable for training)")
     args = parser.parse_args()
 
-    # get_boxes reads the threshold from treinar, so update that module before inference.
-    treinar.CONFIDENCE_THRESHOLD = args.threshold
+    # get_boxes reads the threshold from train, so update that module before inference.
+    train.CONFIDENCE_THRESHOLD = args.threshold
 
     model = FireNet()
     checkpoint = torch.load(CHECKPOINT, map_location="cpu", weights_only=True)
@@ -159,7 +159,7 @@ def main():
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (255, 255, 0), 2)
 
-            if args.gravar:
+            if args.record:
 
                 if writer is None:
                     altura, largura = frame.shape[:2]
@@ -172,13 +172,13 @@ def main():
                     # The mp4v codec is used for MP4 output.
                     codec = cv2.VideoWriter_fourcc(*"mp4v")
 
-                    writer = cv2.VideoWriter(args.gravar, codec, fps,
+                    writer = cv2.VideoWriter(args.record, codec, fps,
                                              (largura, altura))
 
-                    print(f"Recording to {args.gravar} "
+                    print(f"Recording to {args.record} "
                           f"({largura}x{altura}, {fps:.0f} fps)")
 
-                writer.write(frame if args.com_caixas else limpo)
+                writer.write(frame if args.with_boxes else limpo)
 
             cv2.imshow("FireNet - live detection", frame)
 
@@ -188,7 +188,7 @@ def main():
     finally:
         if writer is not None:
             writer.release()
-            print(f"Video saved: {args.gravar}")
+            print(f"Video saved: {args.record}")
 
         capture.release()
         cv2.destroyAllWindows()

@@ -7,25 +7,34 @@ import time
 
 import torch
 
-from dados import GRID_SIZE, IMAGE_SIZE, build_loader, PROJECT_DIR
-from modelo import FireNet
+from data import GRID_SIZE, IMAGE_SIZE, build_loader, PROJECT_DIR
+from model import FireNet
 
 
 CHECKPOINT = os.path.join(PROJECT_DIR, "firenet_grid.pt")
 
 POSITION_WEIGHT = 1
 
-COUNT_WEIGHT = 1
+COUNT_WEIGHT = 3
 
 FIRE_WEIGHT = 1
 
-NO_FIRE_WEIGHT = 3
+NO_FIRE_WEIGHT = 2
 
-CONFIDENCE_THRESHOLD = 0.6
+CONFIDENCE_THRESHOLD = 0.7
 
 MAX_DISTANCE = 10
 
 MEASURE_TRAIN = False
+
+# Starting learning rate for each new run, including when loading saved weights.
+LEARNING_RATE = 0.001
+
+# Halve the current learning rate after this many epochs without a new best score.
+LEARNING_RATE_PATIENCE = 5
+
+# Stop reducing after five halvings; changing the base rate also changes this limit.
+MIN_LEARNING_RATE = LEARNING_RATE / 32
 
 
 def get_boxes(grid, prediction=True):
@@ -153,15 +162,17 @@ def report(name, results):
 
 if __name__ == "__main__":
 
-    from criar_cache import ensure_cache
+    from build_cache import ensure_cache
     ensure_cache()
 
-    train_loader = build_loader("train", True)
+    train_loader = build_loader("train", True, augment=True)
+    # Measure training performance on unchanged images, just like validation.
+    train_evaluation_loader = build_loader("train", False)
     valid_loader = build_loader("valid", False)
 
     model = FireNet()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     presence_loss = torch.nn.BCEWithLogitsLoss(reduction="none")
     position_loss = torch.nn.MSELoss(reduction="none")
@@ -178,7 +189,15 @@ if __name__ == "__main__":
 
     total_steps = len(train_loader)
 
+    learning_rate = LEARNING_RATE
+    epochs_without_improvement = 0
+
     for epoch in range(30):
+
+        # Python counts from 0; use 1..30 to match the epoch numbers shown below.
+        epoch_number = epoch + 1
+
+        print(f"epoch {epoch_number:2d}  learning rate: {learning_rate:g}")
 
         model.train()
 
@@ -237,7 +256,7 @@ if __name__ == "__main__":
 
         if MEASURE_TRAIN:
             start = time.time()
-            train_results = evaluate(model, train_loader)
+            train_results = evaluate(model, train_evaluation_loader)
             eval_train_seconds = time.time() - start
             report(f"epoch {epoch + 1:2d}  train", train_results)
 
@@ -257,7 +276,32 @@ if __name__ == "__main__":
 
         if score > best_score:
             best_score = score
+            # A new best score restarts the wait; keep the current learning rate.
+            epochs_without_improvement = 0
 
             torch.save({"score": score, "weights": model.state_dict()}, CHECKPOINT)
 
             print("Saved", CHECKPOINT)
+        else:
+            # Equal or lower scores do not beat the best saved model.
+            epochs_without_improvement += 1
+
+        if epochs_without_improvement >= LEARNING_RATE_PATIENCE:
+            # Smaller updates may help refine the model after progress stalls.
+            # This rate takes effect in the next epoch, not the one just evaluated.
+            next_learning_rate = learning_rate / 2
+            if next_learning_rate < MIN_LEARNING_RATE:
+                next_learning_rate = MIN_LEARNING_RATE
+
+            if next_learning_rate < learning_rate:
+                learning_rate = next_learning_rate
+
+                # Change Adam's rate without discarding its accumulated history.
+                for parameter_group in optimizer.param_groups:
+                    parameter_group["lr"] = learning_rate
+
+                print(f"No improvement for {LEARNING_RATE_PATIENCE} epochs. "
+                      f"Learning rate for the next epoch: {learning_rate:g}")
+
+            # Allow another full waiting period before considering another reduction.
+            epochs_without_improvement = 0

@@ -14,7 +14,7 @@ constexpr int GPIO_PAN = 18;
 constexpr int GPIO_TILT = 19;
 
 // Returns true on success or false on failure.
-bool inicializarServos();
+bool inicializarServos(int pan_us = PULSO_CENTRO_US, int tilt_us = PULSO_CENTRO_US);
 
 // Selects the GPIO pin and requests a servo position using pulse width.
 // gpio: BCM GPIO number, not the physical connector pin number.

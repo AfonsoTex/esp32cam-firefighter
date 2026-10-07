@@ -12,14 +12,14 @@ import time
 import cv2
 import numpy as np
 
-from dados import IMAGE_SIZE, build_split, CACHE_DIR
+from data import IMAGE_SIZE, build_split, CACHE_DIR
 
 
 # Decompresses every JPEG once, resizes it, and stores the resulting pixels.
 # Training then reads pixels that are already decompressed instead of running
 # the JPEG decoder again in every epoch.
 #
-# Run once, from this folder:   python criar_cache.py
+# Run once, from this folder:   python build_cache.py
 # Run it again only if the dataset changes or IMAGE_SIZE changes.
 
 

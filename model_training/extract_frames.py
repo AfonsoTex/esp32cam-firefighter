@@ -23,7 +23,7 @@ def extract_frames(video_path, every=10, frames_root=None):
         raise ValueError("The interval must be at least 1 frame.")
     video_path = Path(video_path).resolve(strict=True)
     if frames_root is None:
-        frames_root = Path(__file__).resolve().parent / "resultados" / "frames"
+        frames_root = Path(__file__).resolve().parent / "results" / "frames"
     frames_root = Path(frames_root).resolve()
     session_id = uuid.uuid4().hex
     folder = frames_root / (video_path.stem + "_" + session_id + "_frames")
@@ -69,10 +69,10 @@ def extract_frames(video_path, every=10, frames_root=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("video", help="Video file")
-    parser.add_argument("--cada", type=int, default=10,
+    parser.add_argument("--every", type=int, default=10,
                         help="Save 1 frame every N frames (default: 10)")
     args = parser.parse_args()
-    print(extract_frames(args.video, args.cada))
+    print(extract_frames(args.video, args.every))
 
 
 if __name__ == "__main__":

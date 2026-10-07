@@ -35,11 +35,8 @@ bool Camera::lerFrame(cv::Mat& frame) {
 
     if (frameOriginal.empty()) return false;
 
-    // Resize the frame to the model input size.
-    cv::resize(frameOriginal, frame, cv::Size(128, 128));
-
-    // Correct the camera orientation before inference and display.
-    cv::rotate(frame, frame, cv::ROTATE_180);
+    // Keep the captured resolution for display and correct the camera orientation.
+    cv::rotate(frameOriginal, frame, cv::ROTATE_180);
 
     // Convert BGR to RGB for the model.
     cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);

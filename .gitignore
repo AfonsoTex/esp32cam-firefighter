@@ -1,2 +1,7 @@
 .venv/
 __pycache__/
+
+# Keep local datasets, annotations, extracted frames and caches out of Git.
+/Datasets/
+/model_training/results/
+/treino_modelo/resultados/

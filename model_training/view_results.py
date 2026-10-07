@@ -5,12 +5,12 @@ import os
 import cv2
 import torch
 
-from dados import IMAGE_SIZE, FireDataset, PROJECT_DIR
-from modelo import FireNet
-from treinar import CHECKPOINT, get_boxes, MAX_DISTANCE
+from data import IMAGE_SIZE, FireDataset, PROJECT_DIR
+from model import FireNet
+from train import CHECKPOINT, get_boxes, MAX_DISTANCE
 
 
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "resultados", "previsoes_valid")
+OUTPUT_DIR = os.path.join(PROJECT_DIR, "results", "validation_predictions")
 
 
 def tensor_to_image(image_tensor):
@@ -39,7 +39,7 @@ def draw_box(image, x, y, width, height, color):
 if __name__ == "__main__":
 
     if not os.path.exists(CHECKPOINT):
-        raise FileNotFoundError("Run treinar.py first to create firenet_grid.pt.")
+        raise FileNotFoundError("Run train.py first to create firenet_grid.pt.")
 
     valid_dataset = FireDataset("valid")
 

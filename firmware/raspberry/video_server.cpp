@@ -24,7 +24,7 @@ const std::string PAGE = R"HTML(<!doctype html>
     main { max-width: 760px; margin: 40px auto; padding: 0 20px; }
     h1 { margin-bottom: 8px; }
     p { color: #b7c5d2; line-height: 1.5; }
-    img { display: block; width: 100%; max-width: 512px; height: auto;
+    img { display: block; width: 100%; max-width: 640px; height: auto;
           background: #080c10; border-radius: 12px; }
     a { color: #86d6ff; }
   </style>
@@ -33,7 +33,7 @@ const std::string PAGE = R"HTML(<!doctype html>
   <main>
     <h1>FireNet</h1>
     <p>Camera video with model detections.</p>
-    <img src="/stream.mjpg" width="512" height="512"
+    <img src="/stream.mjpg" width="640" height="480"
          alt="Camera video. If it does not appear, check that FireNet is running.">
     <p>Green boxes show detections; the number indicates model confidence.</p>
     <p>If the video stops, check the program on the Raspberry Pi and <a href="/">reconnect</a>.</p>

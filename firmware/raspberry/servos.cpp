@@ -6,10 +6,15 @@
 
 // static: internal linkage. The name PWMCHIP only exists inside servos.cpp.
 // const: does not change after it is created.
-static const std::string PWMCHIP = "/sys/class/pwm/pwmchip0";
+// On the current Pi configuration, pwmchip1 is PWM0 (device 1f00098000.pwm).
+// GPIO18 uses channel 2 and GPIO19 uses channel 3. pwmchip0 belongs to the fan.
+// Check this path again after reboot or PWM configuration changes.
+static const std::string PWMCHIP = "/sys/class/pwm/pwmchip1";
 
-bool inicializarServos()
+bool inicializarServos(int pan_us, int tilt_us)
 {
+    if (pan_us < PULSO_MIN_US || pan_us > PULSO_MAX_US ||
+        tilt_us < PULSO_MIN_US || tilt_us > PULSO_MAX_US) return false;
     if (!std::filesystem::exists(PWMCHIP + "/pwm2")) {
         std::ofstream f(PWMCHIP + "/export");
         if (!f) {
@@ -34,6 +39,19 @@ bool inicializarServos()
         }
     }
 
+    // Disable both outputs before changing their period or initial position.
+    for (const char* channel : {"/pwm2/enable", "/pwm3/enable"}) {
+        std::ofstream output(PWMCHIP + channel);
+        if (!output) {
+            return false;
+        }
+        output << 0;
+        output.flush();
+        if (!output) {
+            return false;
+        }
+    }
+
     {
         std::ofstream f(PWMCHIP + "/pwm2/period");
         if (!f) {
@@ -50,7 +68,7 @@ bool inicializarServos()
         if (!f) {
             return false;
         }
-        f << 1500000;
+        f << pan_us * 1000;
         f.flush();
         if (!f) {
             return false;
@@ -84,7 +102,7 @@ bool inicializarServos()
         if (!f) {
             return false;
         }
-        f << 1500000;
+        f << tilt_us * 1000;
         f.flush();
         if (!f) {
             return false;
@@ -142,27 +160,9 @@ bool definirPulso(int gpio, int pulso_us)
 
 void terminarServos()
 {
-    // Stops the pulses on both channels.
-    {
-        std::ofstream f(PWMCHIP + "/pwm2/enable");
-        if (!f) {
-            return;
-        }
-        f << 0;
-        f.flush();
-        if (!f) {
-            return;
-        }
-    }
-    {
-        std::ofstream f(PWMCHIP + "/pwm3/enable");
-        if (!f) {
-            return;
-        }
-        f << 0;
-        f.flush();
-        if (!f) {
-            return;
-        }
+    // Attempt both channels even if one cannot be disabled.
+    for (const char* channel : {"/pwm2/enable", "/pwm3/enable"}) {
+        std::ofstream f(PWMCHIP + channel);
+        if (f) { f << 0; f.flush(); }
     }
 }

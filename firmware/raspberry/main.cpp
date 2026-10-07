@@ -1,6 +1,11 @@
 #include "camera.h"
-#include "inferencia.h"
+#include "inference.h"
 #include "video_server.h"
+#include "aim_controller.h"
+#include "servos.h"
+#include "pump.h"
+#include <chrono>
+#include <stdexcept>
 
 #include <opencv2/opencv.hpp>
 
@@ -14,14 +19,9 @@
 #include <string>
 #include <vector>
 
-// The model output is a 32x32 grid.
-constexpr int GRID_SIZE = 32;
-
 // Minimum confidence (0..1) needed to draw a flame box.
-constexpr float CONFIDENCE_THRESHOLD = 0.6;
+constexpr float CONFIDENCE_THRESHOLD = 0.60f;
 
-// The browser shows the 128x128 frame enlarged to this size.
-constexpr int DISPLAY_SIZE = 512;
 constexpr unsigned short HTTP_PORT = 8080;
 
 // Signal handlers only set a flag; normal code releases the resources.
@@ -32,18 +32,15 @@ void requestStop(int)
     stopRequested = 1;
 }
 
+// Use one monotonic clock for aiming and cooldowns; system clock changes cannot affect it.
+double currentTimeSeconds()
+{
+    return std::chrono::duration<double>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 // Path to the trained model. Run the program from the folder that contains it.
 const std::string MODEL_PATH = "firenet.onnx";
-
-// One detected flame. All values are normalized (0..1) relative to the image.
-struct Detection {
-    float x;          // Box center, horizontal.
-    float y;          // Box center, vertical.
-    float width;
-    float height;
-    float confidence;
-};
-
 
 // Convert a raw model value into a probability between 0 and 1.
 float sigmoid(float value)
@@ -52,8 +49,8 @@ float sigmoid(float value)
 }
 
 
-// Turn the 32x32 grid of raw predictions into a list of flame boxes.
-// This follows the same rules as get_boxes() in treinar.py.
+// Turn the 45x45 grid of raw predictions into a list of flame boxes.
+// This follows the same rules as get_boxes() in train.py.
 std::vector<Detection> getDetections(const std::vector<Prediction>& predictions)
 {
     std::vector<Detection> detections;
@@ -141,8 +138,52 @@ void drawDetections(cv::Mat& image, const std::vector<Detection>& detections)
 }
 
 
-int main()
+// Reject incomplete values such as "1500abc" before enabling movement.
+int readInteger(const char* text)
 {
+    std::size_t end;
+    int value = std::stoi(text, &end);
+    if (text[end] != '\0') {
+        throw std::invalid_argument("Invalid integer");
+    }
+    return value;
+}
+
+
+int main(int argc, char* argv[])
+{
+    // Movement requires explicit calibrated home pulses and axis directions.
+    bool aimEnabled = false;
+    bool pumpEnabled = false;
+    int homePan = 1500, homeTilt = 1500, panDirection = 1, tiltDirection = 1;
+    if (argc != 1) {
+        if ((argc != 6 && argc != 7) || std::string(argv[1]) != "--aim") {
+            std::cerr << "Usage: ./firenet [--aim PAN_HOME_US TILT_HOME_US PAN_DIRECTION TILT_DIRECTION [--pump]]\n"
+                      << "Directions must be +1 or -1. Calibrate the ground-facing home position first.\n";
+            return 1;
+        }
+        try {
+            if (argc == 7) {
+                if (std::string(argv[6]) != "--pump") {
+                    throw std::invalid_argument("The optional final argument must be --pump.");
+                }
+                pumpEnabled = true;
+            }
+            homePan = readInteger(argv[2]);
+            homeTilt = readInteger(argv[3]);
+            panDirection = readInteger(argv[4]);
+            tiltDirection = readInteger(argv[5]);
+            if (homePan < PULSO_MIN_US || homePan > PULSO_MAX_US ||
+                homeTilt < PULSO_MIN_US || homeTilt > PULSO_MAX_US ||
+                std::abs(panDirection) != 1 || std::abs(tiltDirection) != 1)
+                throw std::invalid_argument("Home pulses must be 1000..2000 us; directions must be +1 or -1.");
+            aimEnabled = true;
+        } catch (const std::exception& error) {
+            std::cerr << error.what() << '\n';
+            return 1;
+        }
+    }
+    AimController aim(homePan, homeTilt, panDirection, tiltDirection);
     std::signal(SIGINT, requestStop);
     std::signal(SIGTERM, requestStop);
 
@@ -172,6 +213,29 @@ int main()
     std::cout << "Video available at http://BaraoForrester.local:" << HTTP_PORT
               << "/ (or use the Raspberry Pi IP address). Press Ctrl+C to exit." << std::endl;
 
+    if (aimEnabled && (!inicializarServos(homePan, homeTilt))) {
+        std::cerr << "Could not initialize servos. Check PWM configuration and permissions.\n";
+        terminarServos();
+        return 1;
+    }
+    if (aimEnabled) {
+        std::cout << "Aiming enabled: keep the car stationary during this test.\n";
+    } else {
+        std::cout << "Video only. Use --aim with calibrated values to enable servo movement.\n";
+    }
+
+    // Claim the pump output as LOW before processing any target.
+    if (pumpEnabled) {
+        if (!inicializarBomba()) {
+            std::cerr << "Could not initialize the pump on GPIO 17.\n";
+            terminarBomba();
+            terminarServos();
+            return 1;
+        }
+        std::cout << "Pump enabled: 1-second pulses after centering, with limited retries and a cooldown.\n";
+    }
+    // Remember an outstanding pulse until lgpio reports that it has finished.
+    bool pumpPulsePending = false;
     cv::Mat frame;
     int exitCode = 0;
 
@@ -179,7 +243,7 @@ int main()
     try {
         while (!stopRequested) {
 
-            // The frame is already 128x128 and RGB, as the model expects.
+            // Capture a full-resolution RGB frame for inference and display.
             if (!camera.lerFrame(frame)) {
                 std::cerr << "Could not read another camera frame." << std::endl;
                 exitCode = 1;
@@ -189,7 +253,9 @@ int main()
             std::vector<Prediction> predictions;
 
             try {
-                predictions = prever(frame);
+                cv::Mat modelFrame;
+                cv::resize(frame, modelFrame, cv::Size(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE));
+                predictions = prever(modelFrame);
             } catch (const std::exception& error) {
                 std::cerr << "Inference error: " << error.what() << std::endl;
                 exitCode = 1;
@@ -198,12 +264,60 @@ int main()
 
             std::vector<Detection> detections = getDetections(predictions);
 
+            if (aimEnabled) {
+                const double now = currentTimeSeconds();
+
+                // Start the retry cooldown after the real pulse ends, not when it starts.
+                if (pumpEnabled && pumpPulsePending && !pumpIsRunning()) {
+                    aim.pumpPulseFinished(currentTimeSeconds());
+                    pumpPulsePending = false;
+                }
+
+                bool positionChanged = aim.update(detections, now);
+
+                // Stop spraying before moving the servos, or if the target disappears.
+                if (pumpEnabled && aim.state != AimController::State::Hold) {
+                    if (!definirBomba(false)) {
+                        throw std::runtime_error("Could not stop the pump.");
+                    }
+                    if (pumpPulsePending) {
+                        aim.pumpPulseFinished(currentTimeSeconds());
+                        pumpPulsePending = false;
+                    }
+                }
+                if (positionChanged) {
+                    bool panMoved = definirPulso(GPIO_PAN, aim.pan);
+                    bool tiltMoved = definirPulso(GPIO_TILT, aim.tilt);
+                    if (!panMoved || !tiltMoved) {
+                        throw std::runtime_error("Servo command failed; stopping aiming.");
+                    }
+                }
+
+                // The controller enforces the attempt limit and retry cooldown.
+                // lgpio turns the pump off after one second without pausing capture.
+                if (pumpEnabled && aim.pumpRequested) {
+                    if (!startPumpPulse()) {
+                        throw std::runtime_error("Could not start the pump pulse.");
+                    }
+                    pumpPulsePending = true;
+                    std::cout << "Water pulse started: 1 second.\n";
+                }
+            }
+
             // 4. OpenCV's JPEG encoder expects BGR, while the model receives RGB.
             cv::Mat display;
             cv::cvtColor(frame, display, cv::COLOR_RGB2BGR);
-            cv::resize(display, display, cv::Size(DISPLAY_SIZE, DISPLAY_SIZE));
 
             drawDetections(display, detections);
+            std::string aimingStatus = "Aiming disabled";
+            if (aimEnabled) {
+                aimingStatus = aim.status();
+            }
+            if (pumpEnabled && pumpIsRunning()) {
+                aimingStatus = "Spraying (1 second)";
+            }
+            cv::putText(display, aimingStatus, cv::Point(10, 25),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 2);
 
             // 5. Publish a JPEG for the browser, without opening a desktop window.
             std::vector<unsigned char> jpeg;
@@ -220,6 +334,8 @@ int main()
     }
 
     // Stop browser connections and release the camera.
+    if (pumpEnabled) terminarBomba();
+    if (aimEnabled) terminarServos();
     server.stop();
     camera.libertar();
 
