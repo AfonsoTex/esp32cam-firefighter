@@ -26,6 +26,6 @@ is organised below.
 
 ## Related project files
 
-- [Next phase](../NEXT_PHASE.pdf): planned improvements.
+- [Next phase](https://github.com/AfonsoTex/autonomous-fire-robot): continues in its own repository.
 - [Hardware guide](../hardware/README.md): wiring and chassis files.
 - [Project overview](../README.md): features, setup and demonstration.
