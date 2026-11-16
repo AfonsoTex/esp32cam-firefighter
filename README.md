@@ -210,7 +210,7 @@ firmware/esp32-cam/main/  ESP32 firmware (main.ino) + config.h
 firmware/raspberry/       FireNet inference, browser video, aiming, pump, settings.h
 model_training/           FireNet annotation, training, evaluation and export
 server/                   PC server: video + gamepad control + line following
-hardware/                 wiring diagrams and 3D chassis (STL to print, F3D source)
+hardware/                 wiring diagrams and 3D chassis (Fusion 360 F3D source)
 docs/                     technical report, datasheets, photos and diagrams
 ```
 

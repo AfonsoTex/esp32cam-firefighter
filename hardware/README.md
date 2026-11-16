@@ -1,12 +1,11 @@
 # Hardware
 
-Wiring diagrams and the 3D-printed chassis.
+Wiring diagrams and the 3D-printed chassis (Fusion 360 source; export an STL from it to print).
 
 | File | What it is |
 | --- | --- |
 | `raspberry_pump_servos.png` | Raspberry Pi 5, water pump, MOSFET and pan/tilt servos |
 | `motor_drivers_l293d.png` | The two L293D motor drivers, 5 V step-down and voltmeter |
-| `Chassis.stl` | Chassis ready to print |
 | `Chassis.f3d` | Chassis source (Fusion 360) |
 
 ## Raspberry Pi, pump and servos
